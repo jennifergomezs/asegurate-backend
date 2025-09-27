@@ -1,5 +1,11 @@
+# Dependencias y artefactos
 node_modules/
-.env
-npm-debug.log*
 dist/
+build/
+*.log
+npm-debug.log*
+
+# Config local / secretos
+.env
+.env.*.local
 .DS_Store
