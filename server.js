@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
+const { isValidObjectId } = mongoose;
 dotenv.config();
 
 const app = express();
@@ -15,8 +16,24 @@ app.use(express.json());
 // =========================
 // 1) Conexión a MongoDB
 // =========================
-await mongoose.connect(process.env.MONGODB_URI);
-const { isValidObjectId } = mongoose;
+try {
+  if (!process.env.MONGODB_URI) {
+    console.error("❌ MONGODB_URI no está definido en .env");
+    process.exit(1);
+  }
+
+  await mongoose.connect(process.env.MONGODB_URI /*, { serverSelectionTimeoutMS: 10000 }*/);
+
+  console.log("✅ Conectado a MongoDB");
+} catch (err) {
+  console.error("❌ Error conectando a MongoDB:", err?.message || err);
+  process.exit(1);
+}
+
+// Logs extra opcionales
+mongoose.connection.on("error", (e) => {
+  console.error("❌ Error de conexión Mongo:", e?.message || e);
+});
 
 // =========================
 // 2) Modelos (Schemas)
@@ -29,27 +46,41 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const clientSchema = new mongoose.Schema({
-  docType: { type: String, enum: ["CC","PPT","CE","PEP"], required: true },
+  docType: { type: String, default: "CC" },
   docNumber: { type: String, required: true, index: true },
+
   firstName: { type: String, required: true },
   secondName: { type: String, default: "" },
   lastName: { type: String, required: true },
   secondLastName: { type: String, default: "" },
-  birth: { type: String, required: true },
+
+  birth: { type: String, default: "" },
   phone: { type: String, required: true },
-  address: { type: String, required: true },
-  city: { type: String, required: true },
-  email: { type: String, required: true },
-  affiliateType: { type: String, enum: ["INDEPENDIENTE","DEPENDIENTE"], required: true },
-  eps: { type: String, enum: ["SALUD TOTAL","NUEVA EPS","SANITAS","CAJACOPI","CAPITAL SALUD","FAMISANAR","FOSYGA"], required: true },
-  afp: { type: String, enum: ["COLPENSIONES","PORVENIR","PROTECCION","COLFONDOS","SIN AFP"], required: true },
-  arl: { type: String, enum: ["POSITIVA","SURA","SEGUROS BOLIVAR","SIN ARL"], required: true },
-  ccf: { type: String, enum: ["COFREM","COLSUBSIDIO","COMPENSAR","CAJASAM","SIN CCF"], required: true },
-  risk: { type: Number, enum: [1,2,3,4,5], required: true },
-  ref: { type: String, default: "" },
-  joinDate: { type: String, required: true },
+  address: { type: String, default: "" },
+  city: { type: String, default: "" },
+  email: { type: String, default: "" },
+
+  clientType: { type: String, default: "AGRUPADO" },
+  groupName: { type: String, default: "" },
+  companyName: { type: String, default: "" },
+
+  eps: { type: String, default: "SANITAS" },
+  afp: { type: String, default: "PROTECCION" },
+  arl: { type: String, default: "SEGUROS BOLIVAR" },
+  ccf: { type: String, default: "NO APLICA" },
+
+  plan: { type: String, default: "4" },
+  risk: { type: String, default: "1" },
+  salaryBase: { type: String, default: "1750905" },
+  serviceValue: { type: String, default: "0" },
+  over55: { type: String, default: "NO" },
+
+  joinDate: { type: String, default: "" },
   leaveDate: { type: String, default: "" },
-  status: { type: String, enum: ["ACTIVO","RETIRADO"], required: true },
+  status: { type: String, default: "ACTIVO" },
+  ref: { type: String, default: "" },
+
+  history: { type: Array, default: [] },
 }, { timestamps: true });
 
 const receiptSchema = new mongoose.Schema({
