@@ -265,36 +265,33 @@ app.get("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   res.json(list);
 });
 
-// Editar cliente (solo admin) con validación de ObjectId
-app.put("/clients/:id", auth, allow("ADMIN"), async (req,res)=>{
-  try{
+// Editar cliente
+app.put("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
     const { id } = req.params;
-    if(!isValidObjectId(id)) return res.status(400).json({error:"ID de cliente inválido"});
-    const c = await Client.findByIdAndUpdate(id, req.body, {new:true});
-    if(!c) return res.status(404).json({error:"Cliente no encontrado"});
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "ID de cliente inválido" });
+
+    const c = await Client.findByIdAndUpdate(id, req.body, { new: true });
+
+    if (!c) return res.status(404).json({ error: "Cliente no encontrado" });
+
     res.json(c);
-  }catch(e){
+  } catch (e) {
     console.error("ERROR PUT /clients/:id", e);
-    res.status(500).json({error:e.message || "Error interno"});
+    res.status(500).json({ error: e.message || "Error interno" });
   }
 });
 
-// ---- Recibos (acepta _id o cédula)
-app.post("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
+// Eliminar cliente
+app.delete("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
   try {
-    const {
-      clientId,        // opcional: _id de Mongo
-      docNumber,       // opcional: cédula
-      planType, risk,
-      isOver55 = false,
-      monthLabel, paymentMethod,
-      planilla = "", note = ""
-    } = req.body;
+    const { id } = req.params;
 
-    // Elimina el CLiente
-    app.delete("/clients/:id", async (req, res) => {
-  try {
-    const deleted = await Client.findByIdAndDelete(req.params.id);
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de cliente inválido" });
+    }
+
+    const deleted = await Client.findByIdAndDelete(id);
 
     if (!deleted) {
       return res.status(404).json({ error: "Cliente no encontrado" });
@@ -307,7 +304,20 @@ app.post("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   }
 });
 
-    // Buscar cliente por _id válido o por cédula
+
+// ---- Recibos (acepta _id o cédula)
+app.post("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
+  try {
+    const {
+      clientId,        // opcional: _id de Mongo
+      docNumber,       // opcional: cédula
+      planType, risk,
+      isOver55 = false,
+      monthLabel, paymentMethod,
+      planilla = "", note = ""
+    } = req.body;
+    
+       // Buscar cliente por _id válido o por cédula
     let client = null;
     if (clientId && isValidObjectId(clientId)) {
       client = await Client.findById(clientId);
