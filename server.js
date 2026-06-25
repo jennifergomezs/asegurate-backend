@@ -33,10 +33,17 @@ app.use(express.json());
 
 
 // Logs extra opcionales
-mongoose.connection.on("error", (e) => {
-  console.error("❌ Error de conexión Mongo:", e?.message || e);
-});
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("MongoDB conectado");
 
+    app.listen(process.env.PORT || 8080, () => {
+      console.log("API Asegurate escuchando en puerto", process.env.PORT || 8080);
+    });
+  })
+  .catch((err) => {
+    console.error("Error conectando MongoDB:", err.message);
+  });
 // =========================
 // 2) Modelos (Schemas)
 // =========================
