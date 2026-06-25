@@ -10,32 +10,28 @@ const { isValidObjectId } = mongoose;
 dotenv.config();
 
 const app = express();
-app.use(cors({
-  origin: "https://asegurate-frontend.vercel.app",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+const allowedOrigins = [
+  "https://asegurate-frontend.vercel.app",
+];
 
-app.options("*", cors());
-app.use(express.json());
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
 
-// =========================
-// 1) Conexión a MongoDB
-// =========================
-try {
-  if (!process.env.MONGODB_URI) {
-    console.error("❌ MONGODB_URI no está definido en .env");
-    process.exit(1);
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
   }
 
-  await mongoose.connect(process.env.MONGODB_URI /*, { serverSelectionTimeoutMS: 10000 }*/);
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
 
-  console.log("✅ Conectado a MongoDB");
-} catch (err) {
-  console.error("❌ Error conectando a MongoDB:", err?.message || err);
-  process.exit(1);
-}
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
 
+  next();
+});
+
+app.use(express.json());
 // Logs extra opcionales
 mongoose.connection.on("error", (e) => {
   console.error("❌ Error de conexión Mongo:", e?.message || e);
