@@ -28,7 +28,7 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-
+console.log("ENV MONGODB_URI:", process.env.MONGODB_URI ? "SI EXISTE" : "NO EXISTE");
 // Logs extra opcionales
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
