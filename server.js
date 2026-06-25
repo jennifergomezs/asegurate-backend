@@ -33,7 +33,9 @@ console.log("ENV MONGODB_URI:", process.env.MONGODB_URI ? "SI EXISTE" : "NO EXIS
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("MongoDB conectado");
-
+// =========================
+// 7) Iniciar servidor
+// =========================
     app.listen(process.env.PORT || 8080, () => {
       console.log("API Asegurate escuchando en puerto", process.env.PORT || 8080);
     });
@@ -348,5 +350,4 @@ app.get("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
 // =========================
 // 7) Iniciar servidor
 // =========================
-const port = process.env.PORT || 8080;
-app.listen(port, ()=> console.log("API Asegurate escuchando en puerto", port));
+
