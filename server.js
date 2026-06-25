@@ -302,7 +302,7 @@ app.post("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
 
     res.json({ message: "Cliente eliminado correctamente" });
   } catch (err) {
-    console.error(err);
+    console.error("Error eliminando cliente:", err);
     res.status(500).json({ error: "Error eliminando cliente" });
   }
 });
