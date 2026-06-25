@@ -291,6 +291,22 @@ app.post("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
       planilla = "", note = ""
     } = req.body;
 
+    // Elimina el CLiente
+    app.delete("/clients/:id", async (req, res) => {
+  try {
+    const deleted = await Client.findByIdAndDelete(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Cliente no encontrado" });
+    }
+
+    res.json({ message: "Cliente eliminado correctamente" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error eliminando cliente" });
+  }
+});
+
     // Buscar cliente por _id válido o por cédula
     let client = null;
     if (clientId && isValidObjectId(clientId)) {
