@@ -10,28 +10,28 @@ const { isValidObjectId } = mongoose;
 dotenv.config();
 
 const app = express();
-const allowedOrigins = [
-  "https://asegurate-frontend.vercel.app",
-];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
+  if (origin === "https://asegurate-frontend.vercel.app") {
+    res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
+    return res.sendStatus(204);
   }
 
   next();
 });
 
 app.use(express.json());
+
+
 // Logs extra opcionales
 mongoose.connection.on("error", (e) => {
   console.error("❌ Error de conexión Mongo:", e?.message || e);
