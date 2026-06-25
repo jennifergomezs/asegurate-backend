@@ -183,20 +183,23 @@ function calcAmounts(planType, risk, isOver55){
 }
 
 // =========================
-// 5) Crear admin si no existe
+// 5) Crear / actualizar admin
 // =========================
-(async ()=>{
-  const anyUser = await User.findOne();
-  if(!anyUser){
-    const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD,10);
-    await User.create({
-      name:"Administrador",
-      email:process.env.ADMIN_EMAIL,
-      passwordHash:hash,
-      role:"ADMIN"
-    });
-    console.log("Admin creado:", process.env.ADMIN_EMAIL);
-  }
+(async () => {
+  const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+
+  await User.findOneAndUpdate(
+    { email: process.env.ADMIN_EMAIL },
+    {
+      name: "Jennifer Gómez",
+      email: process.env.ADMIN_EMAIL,
+      passwordHash: hash,
+      role: "ADMIN",
+    },
+    { upsert: true, new: true }
+  );
+
+  console.log("Admin listo:", process.env.ADMIN_EMAIL);
 })();
 
 // =========================
