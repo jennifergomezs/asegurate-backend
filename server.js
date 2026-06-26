@@ -260,7 +260,18 @@ app.post("/auth/login", async (req,res)=>{
 
 // ---- Usuarios (crear asesor) - solo ADMIN
 app.post("/users", auth, allow("ADMIN"), async (req,res)=>{
-  // ---- Empresas
+  try{
+    const {name,email,password,role} = req.body;
+    const r = role || "ASESOR";
+    const hash = await bcrypt.hash(password,10);
+    const u = await User.create({name,email,passwordHash:hash,role:r});
+    res.json({id:u._id, name:u.name, email:u.email, role:u.role});
+  }catch(e){
+    res.status(400).json({error:e.message || "No se pudo crear el usuario"});
+  }
+});
+
+// ---- Empresas
 app.post("/companies", auth, allow("ADMIN"), async (req, res) => {
   try {
     const company = await Company.create(req.body);
@@ -273,16 +284,6 @@ app.post("/companies", auth, allow("ADMIN"), async (req, res) => {
 app.get("/companies", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   const list = await Company.find({ active: true }).sort({ name: 1 });
   res.json(list);
-});
-  try{
-    const {name,email,password,role} = req.body;
-    const r = role || "ASESOR";
-    const hash = await bcrypt.hash(password,10);
-    const u = await User.create({name,email,passwordHash:hash,role:r});
-    res.json({id:u._id, name:u.name, email:u.email, role:u.role});
-  }catch(e){
-    res.status(400).json({error:e.message || "No se pudo crear el usuario"});
-  }
 });
 
 // ---- Clientes
