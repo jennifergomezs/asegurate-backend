@@ -68,9 +68,31 @@ const clientSchema = new mongoose.Schema({
   city: { type: String, default: "" },
   email: { type: String, default: "" },
 
-  clientType: { type: String, default: "AGRUPADO" },
-  groupName: { type: String, default: "" },
-  companyName: { type: String, default: "" },
+clientType: { 
+  type: String, 
+  enum: ["INDEPENDIENTE", "DEPENDIENTE", "AGRUPADO"], 
+  default: "AGRUPADO" 
+},
+
+companyName: { 
+  type: String, 
+  default: "" 
+},
+
+groupName: { 
+  type: String, 
+  default: "" 
+},
+
+companyNit: { 
+  type: String, 
+  default: "" 
+},
+
+groupNit: { 
+  type: String, 
+  default: "" 
+},
 
   eps: { type: String, default: "SANITAS" },
   afp: { type: String, default: "PROTECCION" },
