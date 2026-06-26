@@ -53,6 +53,16 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ["ADMIN", "ASESOR"], required: true },
 }, { timestamps: true });
 
+const companySchema = new mongoose.Schema({
+  nit: { type: String, required: true, unique: true, trim: true },
+  name: { type: String, required: true, trim: true },
+  address: { type: String, default: "" },
+  city: { type: String, default: "" },
+  phone: { type: String, default: "" },
+  email: { type: String, default: "" },
+  active: { type: Boolean, default: true },
+}, { timestamps: true });
+
 const clientSchema = new mongoose.Schema({
   docType: { type: String, default: "CC" },
   docNumber: { type: String, required: true, index: true },
@@ -143,6 +153,7 @@ const receiptSchema = new mongoose.Schema({
 const counterSchema = new mongoose.Schema({ _id: String, seq: Number });
 
 const User = mongoose.model("User", userSchema);
+const Company = mongoose.model("Company", companySchema);
 const Client = mongoose.model("Client", clientSchema);
 const Receipt = mongoose.model("Receipt", receiptSchema);
 const Counter = mongoose.model("Counter", counterSchema);
@@ -249,6 +260,20 @@ app.post("/auth/login", async (req,res)=>{
 
 // ---- Usuarios (crear asesor) - solo ADMIN
 app.post("/users", auth, allow("ADMIN"), async (req,res)=>{
+  // ---- Empresas
+app.post("/companies", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const company = await Company.create(req.body);
+    res.json(company);
+  } catch (e) {
+    res.status(400).json({ error: e.message || "No se pudo crear la empresa" });
+  }
+});
+
+app.get("/companies", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  const list = await Company.find({ active: true }).sort({ name: 1 });
+  res.json(list);
+});
   try{
     const {name,email,password,role} = req.body;
     const r = role || "ASESOR";
