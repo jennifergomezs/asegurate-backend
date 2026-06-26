@@ -247,6 +247,9 @@ function calcAmounts(planType, risk, isOver55){
 /* 6) Rutas */
 // =========================
 app.get("/", (req,res)=> res.send("ASEGURATE API OK"));
+app.get("/prueba", (req, res) => {
+  res.send("FUNCIONA");
+});
 
 // ---- Auth
 app.post("/auth/login", async (req,res)=>{
