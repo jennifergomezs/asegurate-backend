@@ -22,7 +22,7 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }
-panyshe
+
   next();
 });
 
@@ -53,7 +53,7 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ["ADMIN", "ASESOR"], required: true },
 }, { timestamps: true });
 
-const companySchema = new mongoose.Schema({
+const groupSchema = new mongoose.Schema({
   nit: { type: String, required: true, unique: true, trim: true },
   name: { type: String, required: true, trim: true },
   address: { type: String, default: "" },
