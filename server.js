@@ -22,7 +22,7 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }
-
+panyshe
   next();
 });
 
@@ -54,6 +54,16 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const companySchema = new mongoose.Schema({
+  nit: { type: String, required: true, unique: true, trim: true },
+  name: { type: String, required: true, trim: true },
+  address: { type: String, default: "" },
+  city: { type: String, default: "" },
+  phone: { type: String, default: "" },
+  email: { type: String, default: "" },
+  active: { type: Boolean, default: true },
+}, { timestamps: true });
+
+const groupSchema = new mongoose.Schema({
   nit: { type: String, required: true, unique: true, trim: true },
   name: { type: String, required: true, trim: true },
   address: { type: String, default: "" },
@@ -154,6 +164,7 @@ const counterSchema = new mongoose.Schema({ _id: String, seq: Number });
 
 const User = mongoose.model("User", userSchema);
 const Company = mongoose.model("Company", companySchema);
+const Group = mongoose.model("Group", groupSchema);
 const Client = mongoose.model("Client", clientSchema);
 const Receipt = mongoose.model("Receipt", receiptSchema);
 const Counter = mongoose.model("Counter", counterSchema);
@@ -286,6 +297,21 @@ app.post("/companies", auth, allow("ADMIN"), async (req, res) => {
 
 app.get("/companies", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   const list = await Company.find({ active: true }).sort({ name: 1 });
+  res.json(list);
+});
+
+// ---- Agrupadoras
+app.post("/groups", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const group = await Group.create(req.body);
+    res.json(group);
+  } catch (e) {
+    res.status(400).json({ error: e.message || "No se pudo crear la agrupadora" });
+  }
+});
+
+app.get("/groups", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  const list = await Group.find({ active: true }).sort({ name: 1 });
   res.json(list);
 });
 
