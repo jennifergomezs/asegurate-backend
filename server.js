@@ -316,6 +316,38 @@ app.get("/groups", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   res.json(list);
 });
 
+// Anular recibo
+app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de recibo inválido" });
+    }
+
+    const receipt = await Receipt.findByIdAndUpdate(
+      id,
+      {
+        status: "ANULADO",
+        cancelledAt: new Date(),
+      },
+      {
+        new: true,
+      }
+    );
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    res.json(receipt);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "No se pudo anular el recibo" });
+  }
+});
+
 // ---- Clientes
 app.post("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   try {
