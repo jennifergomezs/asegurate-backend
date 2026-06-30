@@ -334,16 +334,27 @@ app.post("/users", auth, allow("ADMIN"), async (req,res)=>{
 // ---- Empresas
 app.post("/companies", auth, allow("ADMIN"), async (req, res) => {
   try {
+    console.log("BODY /companies:", req.body);
+
     const company = await Company.create(req.body);
+
+    console.log("EMPRESA CREADA:", company);
+
     res.json(company);
   } catch (e) {
+    console.error("ERROR POST /companies", e);
     res.status(400).json({ error: e.message || "No se pudo crear la empresa" });
   }
 });
 
 app.get("/companies", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
-  const list = await Company.find({ active: true }).sort({ name: 1 });
-  res.json(list);
+  try {
+    const list = await Company.find().sort({ createdAt: -1 });
+    res.json(list);
+  } catch (e) {
+    console.error("ERROR GET /companies", e);
+    res.status(500).json({ error: "No se pudieron cargar las empresas" });
+  }
 });
 
 // ---- Agrupadoras
