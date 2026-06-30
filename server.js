@@ -66,10 +66,20 @@ const companySchema = new mongoose.Schema({
 const groupSchema = new mongoose.Schema({
   nit: { type: String, required: true, unique: true, trim: true },
   name: { type: String, required: true, trim: true },
-  address: { type: String, default: "" },
-  city: { type: String, default: "" },
-  phone: { type: String, default: "" },
-  email: { type: String, default: "" },
+
+  documentType: { type: String, default: "NI" },
+  dv: { type: String, default: "" },
+
+  operatorCode: { type: String, default: "" },
+  contributorType: { type: String, default: "" },
+  presentationType: { type: String, default: "" },
+  branchCode: { type: String, default: "1" },
+  branchName: { type: String, default: "PRINCIPAL" },
+
+  arl: { type: String, default: "POSITIVA" },
+  arlCode: { type: String, default: "" },
+
+  notes: { type: String, default: "" },
   active: { type: Boolean, default: true },
 }, { timestamps: true });
 
