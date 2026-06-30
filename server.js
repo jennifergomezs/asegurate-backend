@@ -372,6 +372,79 @@ app.get("/groups", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   res.json(list);
 });
 
+// Obtener una agrupadora por ID
+app.get("/groups/:id", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    const group = await Group.findById(id);
+
+    if (!group) {
+      return res.status(404).json({ error: "Agrupadora no encontrada" });
+    }
+
+    res.json(group);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error obteniendo agrupadora" });
+  }
+});
+
+// Editar agrupadora
+app.put("/groups/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    const group = await Group.findByIdAndUpdate(
+      id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!group) {
+      return res.status(404).json({ error: "Agrupadora no encontrada" });
+    }
+
+    res.json(group);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "No se pudo actualizar la agrupadora" });
+  }
+});
+
+// Eliminar agrupadora
+app.delete("/groups/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    const group = await Group.findByIdAndDelete(id);
+
+    if (!group) {
+      return res.status(404).json({ error: "Agrupadora no encontrada" });
+    }
+
+    res.json({ message: "Agrupadora eliminada correctamente" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "No se pudo eliminar la agrupadora" });
+  }
+});
+
 // Anular recibo
 app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
   try {
