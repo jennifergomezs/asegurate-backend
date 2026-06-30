@@ -91,7 +91,7 @@ const clientSchema = new mongoose.Schema({
 
 clientType: { 
   type: String, 
-  enum: ["INDEPENDIENTE", "DEPENDIENTE", "AGRUPADO"], 
+ enum: ["INDEPENDIENTE", "EMPRESA", "AGRUPADO"],
   default: "AGRUPADO" 
 },
 
