@@ -349,7 +349,14 @@ app.put("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
     const { id } = req.params;
     if (!isValidObjectId(id)) return res.status(400).json({ error: "ID de cliente inválido" });
 
-    const c = await Client.findByIdAndUpdate(id, req.body, { new: true });
+   const c = await Client.findByIdAndUpdate(
+    id,
+    { $set: req.body },
+    {
+        new: true,
+        runValidators: true,
+    }
+);
 
     if (!c) return res.status(404).json({ error: "Cliente no encontrado" });
 
