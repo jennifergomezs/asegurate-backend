@@ -24,7 +24,7 @@ app.use((req, res, next) => {
   }
 
   next();
-});
+}); 
 
 app.use(express.json());
 
@@ -63,15 +63,6 @@ const groupSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
 }, { timestamps: true });
 
-const groupSchema = new mongoose.Schema({
-  nit: { type: String, required: true, unique: true, trim: true },
-  name: { type: String, required: true, trim: true },
-  address: { type: String, default: "" },
-  city: { type: String, default: "" },
-  phone: { type: String, default: "" },
-  email: { type: String, default: "" },
-  active: { type: Boolean, default: true },
-}, { timestamps: true });
 
 const clientSchema = new mongoose.Schema({
   docType: { type: String, default: "CC" },
