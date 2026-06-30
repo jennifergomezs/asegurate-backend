@@ -136,29 +136,74 @@ groupNit: {
 
 const receiptSchema = new mongoose.Schema({
   ticket: { type: Number, unique: true, index: true },
-  date: { type: Date, default: Date.now },
-  monthLabel: { type: String, required: true },  // p.ej. "AGOSTO-2025"
+
+  tempNumber: { type: String, default: "TEMP" },
+
+  createdAt: { type: Date, default: Date.now },
+  createdDate: { type: String, default: "" },
+  createdTime: { type: String, default: "" },
+
+  registeredBy: { type: String, default: "" },
+  registeredRole: { type: String, default: "" },
+
+  month: { type: String, default: "" },
+  year: { type: String, default: "" },
+  monthLabel: { type: String, required: true },
+
   paymentMethod: { type: String, required: true },
-  operator: { type: String, required: true },
-  planilla: { type: String, default: "" },
-  company: { type: String, default: process.env.COMPANY_NAME },
-  note: { type: String, default: "" },
-  status: { type: String, enum:["PAGADO","ANULADO"], default: "PAGADO" },
-
-  planType: { type: Number, enum:[1,2,3,4], required: true },
-  isOver55: { type: Boolean, default: false },
-  risk: { type: Number, enum:[0,1,2,3,4,5], required: true }, // 0 para plan 4.0
-
-  amounts: {
-    eps: Number, arl: Number, afp: Number, cofrem: Number, imp: Number, admon: Number, total: Number
-  },
+  serviceType: { type: String, default: "MENSUALIDAD" },
+  independentServiceType: { type: String, default: "" },
 
   clientId: { type: mongoose.Schema.Types.ObjectId, ref: "Client", required: true },
+
   clientSnapshot: {
-    fullName: String, docType: String, docNumber: String,
-    affiliateType: String, eps: String, afp: String, arl: String, ccf: String,
-    risk: Number, address: String, phone: String
-  }
+    fullName: String,
+    docType: String,
+    docNumber: String,
+    phone: String,
+    email: String,
+    clientType: String,
+    groupName: String,
+    companyName: String,
+    eps: String,
+    afp: String,
+    arl: String,
+    ccf: String,
+    plan: String,
+    risk: String,
+    over55: String,
+  },
+
+  planCode: { type: String, default: "" },
+
+  amounts: {
+    salaryBase: { type: Number, default: 0 },
+    proportionalBase: { type: Number, default: 0 },
+    daysWorked: { type: Number, default: 30 },
+    eps: { type: Number, default: 0 },
+    arl: { type: Number, default: 0 },
+    afp: { type: Number, default: 0 },
+    cofrem: { type: Number, default: 0 },
+    service: { type: Number, default: 0 },
+    totalSystem: { type: Number, default: 0 },
+    received: { type: Number, default: 0 },
+    balance: { type: Number, default: 0 },
+  },
+
+  status: {
+    type: String,
+    enum: ["PAGADO", "SALDO PENDIENTE", "ANULADO"],
+    default: "PAGADO",
+  },
+
+  note: { type: String, default: "" },
+
+  planillaStatus: { type: String, default: "PENDIENTE DE PLANILLA" },
+  planillaNumber: { type: String, default: "" },
+  planillaPaymentDate: { type: String, default: "" },
+
+  cancelledAt: { type: Date, default: null },
+  cancelledBy: { type: String, default: "" },
 }, { timestamps: true });
 
 const counterSchema = new mongoose.Schema({ _id: String, seq: Number });
@@ -328,9 +373,10 @@ app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
     const receipt = await Receipt.findByIdAndUpdate(
       id,
       {
-        status: "ANULADO",
-        cancelledAt: new Date(),
-      },
+  status: "ANULADO",
+  cancelledAt: new Date(),
+  cancelledBy: req.user.name,
+},
       {
         new: true,
       }
@@ -420,74 +466,147 @@ app.delete("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
     res.status(500).json({ error: "Error eliminando cliente" });
   }
 });
-
-
-// ---- Recibos (acepta _id o cédula)
-app.post("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
+   
+// ---- Recibos
+app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   try {
     const {
-      clientId,        // opcional: _id de Mongo
-      docNumber,       // opcional: cédula
-      planType, risk,
-      isOver55 = false,
-      monthLabel, paymentMethod,
-      planilla = "", note = ""
-    } = req.body;
-    
-       // Buscar cliente por _id válido o por cédula
-    let client = null;
-    if (clientId && isValidObjectId(clientId)) {
-      client = await Client.findById(clientId);
-    }
-    if (!client && docNumber) {
-      client = await Client.findOne({ docNumber: String(docNumber) });
-    }
-    if (!client) {
-      return res.status(404).json({ error: "Cliente no encontrado (envía 'clientId' válido o 'docNumber' = cédula)" });
-    }
-
-    const amounts = calcAmounts(Number(planType), Number(risk), Boolean(isOver55));
-    const ticket = await nextTicket();
-
-    const snapshot = {
-      fullName: `${client.firstName} ${client.secondName||""} ${client.lastName} ${client.secondLastName||""}`.replace(/\s+/g," ").trim(),
-      docType: client.docType, docNumber: client.docNumber,
-      affiliateType: client.affiliateType,
-      eps: client.eps, afp: client.afp, arl: client.arl, ccf: client.ccf,
-      risk: client.risk, address: client.address, phone: client.phone
-    };
-
-    const r = await Receipt.create({
-      ticket,
-      date: new Date(),
+      clientId,
+      month,
+      year,
       monthLabel,
       paymentMethod,
-      operator: req.user.name,
-      planilla,
-      company: process.env.COMPANY_NAME,
-      note,
-      status: "PAGADO",
-      planType: Number(planType),
-      isOver55: Boolean(isOver55),
-      risk: Number(risk),
+      serviceType,
+      independentServiceType,
+      clientSnapshot,
+      planCode,
       amounts,
-      clientId: client._id,
-      clientSnapshot: snapshot
+      status,
+      note,
+      planillaStatus,
+    } = req.body;
+
+    if (!clientId || !isValidObjectId(clientId)) {
+      return res.status(400).json({ error: "Cliente inválido" });
+    }
+
+    const client = await Client.findById(clientId);
+
+    if (!client) {
+      return res.status(404).json({ error: "Cliente no encontrado" });
+    }
+
+    const existingReceipt = await Receipt.findOne({
+      clientId,
+      monthLabel,
+      status: { $ne: "ANULADO" },
     });
 
-    res.json(r);
+    if (existingReceipt) {
+      return res.status(400).json({
+        error: `Este cliente ya tiene un recibo registrado para ${monthLabel}`,
+      });
+    }
+
+    const ticket = await nextTicket();
+    const now = new Date();
+
+    const receipt = await Receipt.create({
+      ticket,
+      tempNumber: String(ticket),
+
+      createdAt: now,
+      createdDate: now.toLocaleDateString("es-CO"),
+      createdTime: now.toLocaleTimeString("es-CO"),
+
+      registeredBy: req.user.name,
+      registeredRole: req.user.role,
+
+      month,
+      year,
+      monthLabel,
+
+      paymentMethod,
+      serviceType,
+      independentServiceType,
+
+      clientId: client._id,
+
+      clientSnapshot: clientSnapshot || {
+        fullName: `${client.firstName || ""} ${client.secondName || ""} ${client.lastName || ""} ${client.secondLastName || ""}`.replace(/\s+/g, " ").trim(),
+        docType: client.docType,
+        docNumber: client.docNumber,
+        phone: client.phone,
+        email: client.email,
+        clientType: client.clientType,
+        groupName: client.groupName,
+        companyName: client.companyName,
+        eps: client.eps,
+        afp: client.afp,
+        arl: client.arl,
+        ccf: client.ccf,
+        plan: client.plan,
+        risk: client.risk,
+        over55: client.over55,
+      },
+
+      planCode,
+      amounts,
+
+      status: status || "PAGADO",
+      note: note || "",
+      planillaStatus: planillaStatus || "PENDIENTE DE PLANILLA",
+    });
+
+    res.json(receipt);
   } catch (e) {
-    console.error("ERROR /receipts:", e);
-    res.status(500).json({ error: e.message || "Error interno" });
+    console.error("ERROR POST /receipts", e);
+    res.status(500).json({ error: e.message || "No se pudo crear el recibo" });
   }
 });
 
-// Listar recibos (por mes opcional)
-app.get("/receipts", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
-  const { month } = req.query; // ej: "AGOSTO-2025" o "2025-08"
-  const filter = month ? { monthLabel: new RegExp(month,"i") } : {};
-  const list = await Receipt.find(filter).sort({date:-1});
-  res.json(list);
+app.get("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  try {
+    const list = await Receipt.find().sort({ createdAt: -1 });
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudieron cargar los recibos" });
+  }
+});
+
+app.get("/receipts/client/:clientId", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    if (!isValidObjectId(clientId)) {
+      return res.status(400).json({ error: "ID de cliente inválido" });
+    }
+
+    const list = await Receipt.find({ clientId }).sort({ createdAt: -1 });
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudieron cargar los recibos del cliente" });
+  }
+});
+
+app.get("/receipts/:id", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de recibo inválido" });
+    }
+
+    const receipt = await Receipt.findById(id);
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    res.json(receipt);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudo cargar el recibo" });
+  }
 });
 
 // =========================
