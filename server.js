@@ -64,6 +64,21 @@ const companySchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
 }, { timestamps: true });
 
+const expenseSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  category: { type: String, required: true },
+  description: { type: String, default: "" },
+  paymentMethod: { type: String, required: true },
+  amount: { type: Number, required: true },
+
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+
+  createdByName: { type: String, default: "" },
+}, { timestamps: true });
+
 const groupSchema = new mongoose.Schema({
   nit: { type: String, required: true, unique: true, trim: true },
   name: { type: String, required: true, trim: true },
@@ -220,6 +235,7 @@ const receiptSchema = new mongoose.Schema({
   cancelledBy: { type: String, default: "" },
 }, { timestamps: true });
 
+
 const counterSchema = new mongoose.Schema({ _id: String, seq: Number });
 
 const User = mongoose.model("User", userSchema);
@@ -228,6 +244,7 @@ const Group = mongoose.model("Group", groupSchema);
 const Client = mongoose.model("Client", clientSchema);
 const Receipt = mongoose.model("Receipt", receiptSchema);
 const Counter = mongoose.model("Counter", counterSchema);
+const Expense = mongoose.model("Expense", expenseSchema);
 
 // =========================
 // 3) Tarifas (tu tabla)
@@ -293,6 +310,74 @@ function calcAmounts(planType, risk, isOver55){
   if(!t) throw new Error("Plan/Riesgo no válido");
   return t;
 }
+
+const ARL_RATES = {
+  "0": 0,
+  "1": 0.00522,
+  "2": 0.01044,
+  "3": 0.02436,
+  "4": 0.0435,
+  "5": 0.0696,
+};
+
+function roundToHundred(value) {
+  return Math.ceil(Number(value || 0) / 100) * 100;
+}
+
+function isNoAplica(value) {
+  const text = String(value || "").trim().toUpperCase();
+  return !text || text === "NO APLICA" || text === "SIN AFP" || text === "SIN ARL" || text === "SIN CCF";
+}
+
+function calculateReceiptAmounts(client, serviceValue = 0, independentServiceType = "") {
+  const type = String(client.clientType || "").toUpperCase();
+  const base = Number(client.salaryBase || 1750905);
+  const service = Number(serviceValue || 0);
+  const riskKey = String(client.risk || "0");
+  const arlRate = ARL_RATES[riskKey] || 0;
+
+  if (type === "INDEPENDIENTE" && independentServiceType === "SOLO_LIQUIDACION") {
+    return {
+      code: "INDEPENDIENTE-LIQUIDACION",
+      amounts: {
+        salaryBase: base,
+        proportionalBase: base,
+        daysWorked: 30,
+        eps: 0,
+        arl: 0,
+        afp: 0,
+        cofrem: 0,
+        service,
+        totalSystem: service,
+      },
+    };
+  }
+
+  const epsRate = type === "AGRUPADO" ? 0.04 : 0.125;
+  const ccfRate = type === "AGRUPADO" ? 0.04 : 0.02;
+
+  const eps = isNoAplica(client.eps) ? 0 : roundToHundred(base * epsRate);
+  const afp = isNoAplica(client.afp) ? 0 : roundToHundred(base * 0.16);
+  const arl = isNoAplica(client.arl) ? 0 : roundToHundred(base * arlRate);
+  const cofrem = isNoAplica(client.ccf) ? 0 : roundToHundred(base * ccfRate);
+  const totalSystem = eps + afp + arl + cofrem + service;
+
+  return {
+    code: `${type || "CLIENTE"}-IBC-${base}-R${riskKey}`,
+    amounts: {
+      salaryBase: base,
+      proportionalBase: base,
+      daysWorked: 30,
+      eps,
+      arl,
+      afp,
+      cofrem,
+      service,
+      totalSystem,
+    },
+  };
+}
+
 
 // =========================
 // 5) Crear / actualizar admin
@@ -594,6 +679,57 @@ app.put("/payrolls/register", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
+// ---- Gastos
+app.post("/expenses", auth, async (req, res) => {
+  try {
+    const expense = await Expense.create({
+      ...req.body,
+      createdBy: req.user.id,
+      createdByName: req.user.name,
+    });
+
+    res.json(expense);
+  } catch (e) {
+    res.status(400).json({ error: e.message || "No se pudo crear el gasto" });
+  }
+});
+
+app.get("/expenses", auth, async (req, res) => {
+  try {
+    const query = {};
+
+    if (req.user.role !== "ADMIN") {
+      query.createdByName = req.user.name;
+    }
+
+    const expenses = await Expense.find(query).sort({ date: -1, createdAt: -1 });
+
+    res.json(expenses);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudieron cargar los gastos" });
+  }
+});
+
+app.delete("/expenses/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    const expense = await Expense.findByIdAndDelete(id);
+
+    if (!expense) {
+      return res.status(404).json({ error: "Gasto no encontrado" });
+    }
+
+    res.json({ message: "Gasto eliminado correctamente" });
+  } catch (e) {
+    res.status(500).json({ error: "No se pudo eliminar el gasto" });
+  }
+});
+
 app.put("/payrolls/update", auth, allow("ADMIN"), async (req, res) => {
   try {
     const {
@@ -757,6 +893,16 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       });
     }
 
+    const serviceValueFromReceipt = Number(amounts?.service || client.serviceValue || 0);
+    const calculated = calculateReceiptAmounts(client, serviceValueFromReceipt, independentServiceType);
+    const received = Number(amounts?.received || 0);
+    const balance = calculated.amounts.totalSystem - received;
+    const safeAmounts = {
+      ...calculated.amounts,
+      received,
+      balance,
+    };
+
     const ticket = await nextTicket();
     const now = new Date();
 
@@ -799,10 +945,10 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
         over55: client.over55,
       },
 
-      planCode,
-      amounts,
+      planCode: calculated.code,
+      amounts: safeAmounts,
 
-      status: status || "PAGADO",
+      status: balance > 0 ? "SALDO PENDIENTE" : (status || "PAGADO"),
       note: note || "",
       planillaStatus: planillaStatus || "PENDIENTE DE PLANILLA",
     });
