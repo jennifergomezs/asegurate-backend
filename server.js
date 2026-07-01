@@ -344,6 +344,18 @@ app.post("/users", auth, allow("ADMIN"), async (req,res)=>{
   }
 });
 
+app.get("/users", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const list = await User.find()
+      .select("-passwordHash")
+      .sort({ createdAt: -1 });
+
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudieron cargar los usuarios" });
+  }
+});
+
 // ---- Empresas
 app.post("/companies", auth, allow("ADMIN"), async (req, res) => {
   try {
