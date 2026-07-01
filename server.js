@@ -212,6 +212,9 @@ const receiptSchema = new mongoose.Schema({
   planillaNumber: { type: String, default: "" },
   planillaPaymentDate: { type: String, default: "" },
 
+  operator: { type: String, default: "" },
+  bank: { type: String, default: "" },
+
   cancelledAt: { type: Date, default: null },
   cancelledBy: { type: String, default: "" },
 }, { timestamps: true });
@@ -512,10 +515,10 @@ app.put("/payrolls/register", auth, allow("ADMIN"), async (req, res) => {
       {
         $set: {
           planillaStatus: "PLANILLA PAGADA",
-          planillaNumber,
-          planillaPaymentDate: paymentDate,
-          operator,
-          bank,
+          planillaNumber: String(planillaNumber || ""),
+          planillaPaymentDate: String(paymentDate || ""),
+          operator: String(operator || ""),
+          bank: String(bank || ""),
         },
       }
     );
@@ -532,6 +535,55 @@ app.put("/payrolls/register", auth, allow("ADMIN"), async (req, res) => {
   } catch (err) {
     console.error("ERROR PUT /payrolls/register", err);
     res.status(500).json({ error: "No se pudo registrar la planilla" });
+  }
+});
+
+app.put("/payrolls/update", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const {
+      oldPlanillaNumber,
+      oldPaymentDate,
+      oldOperator,
+      oldBank,
+      planillaNumber,
+      paymentDate,
+      operator,
+      bank,
+    } = req.body;
+
+    if (!oldPlanillaNumber) {
+      return res.status(400).json({ error: "Falta la planilla original" });
+    }
+
+    if (!planillaNumber) {
+      return res.status(400).json({ error: "Debes ingresar el número de planilla" });
+    }
+
+    const result = await Receipt.updateMany(
+      {
+        planillaStatus: "PLANILLA PAGADA",
+        planillaNumber: oldPlanillaNumber,
+        planillaPaymentDate: oldPaymentDate || "",
+        operator: oldOperator || "",
+        bank: oldBank || "",
+      },
+      {
+        $set: {
+          planillaNumber: String(planillaNumber || ""),
+          planillaPaymentDate: String(paymentDate || ""),
+          operator: String(operator || ""),
+          bank: String(bank || ""),
+        },
+      }
+    );
+
+    res.json({
+      message: "Planilla actualizada correctamente",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (err) {
+    console.error("ERROR PUT /payrolls/update", err);
+    res.status(500).json({ error: "No se pudo actualizar la planilla" });
   }
 });
 
