@@ -51,6 +51,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true, index: true },
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ["ADMIN", "ASESOR"], required: true },
+  active: { type: Boolean, default: true },
 }, { timestamps: true });
 
 const companySchema = new mongoose.Schema({
@@ -353,6 +354,31 @@ app.get("/users", auth, allow("ADMIN"), async (req, res) => {
     res.json(list);
   } catch (e) {
     res.status(500).json({ error: "No se pudieron cargar los usuarios" });
+  }
+});
+
+app.put("/users/:id/status", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { active } = req.body;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de usuario inválido" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { active: Boolean(active) },
+      { new: true }
+    ).select("-passwordHash");
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    res.json(user);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudo actualizar el estado del usuario" });
   }
 });
 
