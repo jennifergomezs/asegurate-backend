@@ -418,9 +418,15 @@ app.post("/groups", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
-app.get("/groups", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
-  const list = await Group.find({ active: true }).sort({ name: 1 });
-  res.json(list);
+app.get("/groups", auth, async (req, res) => {
+  try {
+    const groups = await Group.find({})
+      .sort({ createdAt: -1 });
+
+    res.json(groups);
+  } catch (error) {
+    res.status(500).json({ error: "No se pudieron cargar las agrupadoras" });
+  }
 });
 
 // Obtener una agrupadora por ID
