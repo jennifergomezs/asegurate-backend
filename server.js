@@ -502,6 +502,18 @@ app.delete("/groups/:id", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
+// prueba agrupadora sin ver
+app.get("/groups-debug", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const groups = await Group.find({}).sort({ createdAt: -1 });
+
+    res.json(groups);
+  } catch (error) {
+    res.status(500).json({ error: "Error revisando agrupadoras" });
+  }
+});
+
+
 // Anular recibo
 app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
   try {
