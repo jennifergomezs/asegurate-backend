@@ -488,6 +488,53 @@ app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
+// ---- Planillas
+app.put("/payrolls/register", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { receiptIds, planillaNumber, paymentDate, operator, bank } = req.body;
+
+    if (!receiptIds || !Array.isArray(receiptIds) || receiptIds.length === 0) {
+      return res.status(400).json({ error: "Debes seleccionar al menos un recibo" });
+    }
+
+    if (!planillaNumber) {
+      return res.status(400).json({ error: "Debes ingresar el número de planilla" });
+    }
+
+    const invalidId = receiptIds.find((id) => !isValidObjectId(id));
+
+    if (invalidId) {
+      return res.status(400).json({ error: "Hay un ID de recibo inválido" });
+    }
+
+    await Receipt.updateMany(
+      { _id: { $in: receiptIds } },
+      {
+        $set: {
+          planillaStatus: "PLANILLA PAGADA",
+          planillaNumber,
+          planillaPaymentDate: paymentDate,
+          operator,
+          bank,
+        },
+      }
+    );
+
+    const updatedReceipts = await Receipt.find({
+      _id: { $in: receiptIds },
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      message: "Planilla registrada correctamente",
+      count: updatedReceipts.length,
+      receipts: updatedReceipts,
+    });
+  } catch (err) {
+    console.error("ERROR PUT /payrolls/register", err);
+    res.status(500).json({ error: "No se pudo registrar la planilla" });
+  }
+});
+
 // ---- Clientes
 app.post("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   try {
