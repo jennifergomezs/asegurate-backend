@@ -1032,27 +1032,60 @@ app.put("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
       return res.status(400).json({ error: "ID de recibo inválido" });
     }
 
-    const { paymentMethod, amounts, status, note } = req.body;
+    const receipt = await Receipt.findById(id);
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    if (receipt.status === "ANULADO") {
+      return res.status(400).json({ error: "No se puede editar un recibo anulado" });
+    }
+
+    const paymentMethod = req.body.paymentMethod || receipt.paymentMethod;
+    const note = req.body.note ?? receipt.note;
+
+    const received = Number(
+      req.body.amounts?.received ??
+      req.body.received ??
+      receipt.amounts?.received ??
+      0
+    );
+
+    const service = Number(
+      req.body.amounts?.service ??
+      req.body.service ??
+      receipt.amounts?.service ??
+      0
+    );
+
+    const totalSystem =
+      Number(receipt.amounts?.eps || 0) +
+      Number(receipt.amounts?.arl || 0) +
+      Number(receipt.amounts?.afp || 0) +
+      Number(receipt.amounts?.cofrem || 0) +
+      service;
+
+    const balance = totalSystem - received;
 
     const updated = await Receipt.findByIdAndUpdate(
       id,
       {
         paymentMethod,
-        amounts,
-        status,
-        note: note || "",
+        note,
+        "amounts.service": service,
+        "amounts.totalSystem": totalSystem,
+        "amounts.received": received,
+        "amounts.balance": balance,
+        status: balance > 0 ? "SALDO PENDIENTE" : "PAGADO",
       },
       { new: true, runValidators: true }
     );
 
-    if (!updated) {
-      return res.status(404).json({ error: "Recibo no encontrado" });
-    }
-
     res.json(updated);
   } catch (e) {
     console.error("ERROR PUT /receipts/:id", e);
-    res.status(500).json({ error: "No se pudo actualizar el recibo" });
+    res.status(500).json({ error: e.message || "No se pudo actualizar el recibo" });
   }
 });
 
