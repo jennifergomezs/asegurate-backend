@@ -675,7 +675,7 @@ app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
 });
 
 // ---- Planillas
-app.put("/payrolls/register", auth, allow("ADMIN"), async (req, res) => {
+app.put("/payrolls/register", auth, allow("ADMIN" , "ASESOR" ), async (req, res) => {
   try {
     const { receiptIds, planillaNumber, paymentDate, operator, bank } = req.body;
 
@@ -794,7 +794,7 @@ app.delete("/expenses/:id", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
-app.put("/payrolls/update", auth, allow("ADMIN"), async (req, res) => {
+app.put("/payrolls/update", auth, allow("ADMIN", "ASESOR") , async (req, res) => {
   try {
     const {
       oldPlanillaNumber,
