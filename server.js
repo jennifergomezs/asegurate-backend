@@ -114,12 +114,14 @@ const clientSchema = new mongoose.Schema({
   address: { type: String, default: "" },
   city: { type: String, default: "" },
   email: { type: String, default: "" },
+  
 
 clientType: { 
   type: String, 
  enum: ["INDEPENDIENTE", "EMPRESA", "AGRUPADO"],
   default: "AGRUPADO" 
 },
+exonerated: { type: String, default: "NO" },
 
 companyName: { 
   type: String, 
@@ -353,8 +355,19 @@ function calculateReceiptAmounts(client, serviceValue = 0, independentServiceTyp
     };
   }
   
-const epsRate = type === "AGRUPADO" ? 0.04 : 0.125;
-const ccfRate = type === "AGRUPADO" ? 0.04 : 0.02;
+const isExonerated = String(client.exonerated || "").toUpperCase() === "SI";
+
+let epsRate = 0.125;
+
+if (type === "AGRUPADO") {
+  epsRate = 0.04;
+}
+
+if (type === "EMPRESA" && isExonerated) {
+  epsRate = 0.04;
+}
+
+const ccfRate = type === "INDEPENDIENTE" ? 0.02 : 0.04;
 
   const eps = isNoAplica(client.eps) ? 0 : roundToHundred(base * epsRate);
   const afp = isNoAplica(client.afp) ? 0 : roundToHundred(base * 0.16);
