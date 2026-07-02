@@ -1024,6 +1024,60 @@ app.get("/receipts/:id", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   }
 });
 
+app.put("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de recibo inválido" });
+    }
+
+    const { paymentMethod, amounts, status, note } = req.body;
+
+    const updated = await Receipt.findByIdAndUpdate(
+      id,
+      {
+        paymentMethod,
+        amounts,
+        status,
+        note: note || "",
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    res.json(updated);
+  } catch (e) {
+    console.error("ERROR PUT /receipts/:id", e);
+    res.status(500).json({ error: "No se pudo actualizar el recibo" });
+  }
+});
+
+app.delete("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de recibo inválido" });
+    }
+
+    const deleted = await Receipt.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    res.json({ message: "Recibo eliminado correctamente" });
+  } catch (e) {
+    console.error("ERROR DELETE /receipts/:id", e);
+    res.status(500).json({ error: "No se pudo eliminar el recibo" });
+  }
+});
+
+
 // =========================
 // 7) Iniciar servidor
 // =========================
