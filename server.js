@@ -794,7 +794,7 @@ app.delete("/expenses/:id", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
-app.put("/payrolls/update", auth, allow("ADMIN", "ASESOR") , async (req, res) => {
+app.put("/payrolls/update", auth, allow("ADMIN") , async (req, res) => {
   try {
     const {
       oldPlanillaNumber,
