@@ -370,7 +370,16 @@ if (type === "EMPRESA" && isExonerated) {
 const ccfRate = type === "INDEPENDIENTE" ? 0.02 : 0.04;
 
   const eps = isNoAplica(client.eps) ? 0 : roundToHundred(base * epsRate);
-  const afp = isNoAplica(client.afp) ? 0 : roundToHundred(base * 0.16);
+  const FOUR_SMMLV = 1750905 * 4;
+
+const pensionRate =
+  type === "INDEPENDIENTE" && base > FOUR_SMMLV
+    ? 0.17
+    : 0.16;
+
+const afp = isNoAplica(client.afp)
+  ? 0
+  : roundToHundred(base * pensionRate);
   const arl = isNoAplica(client.arl) ? 0 : roundToHundred(base * arlRate);
   const cofrem = isNoAplica(client.ccf) ? 0 : roundToHundred(base * ccfRate);
   const totalSystem = eps + afp + arl + cofrem + service;
