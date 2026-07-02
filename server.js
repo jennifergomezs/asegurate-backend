@@ -743,6 +743,39 @@ app.get("/payrolls", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   }
 });
 
+app.put("/payrolls/remove-receipt", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { receiptId } = req.body;
+
+    if (!receiptId || !isValidObjectId(receiptId)) {
+      return res.status(400).json({ error: "ID de recibo inválido" });
+    }
+
+    const receipt = await Receipt.findByIdAndUpdate(
+      receiptId,
+      {
+        $set: {
+          planillaStatus: "PENDIENTE DE PLANILLA",
+          planillaNumber: "",
+          planillaPaymentDate: "",
+          operator: "",
+          bank: "",
+        },
+      },
+      { new: true }
+    );
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    res.json(receipt);
+  } catch (err) {
+    console.error("ERROR PUT /payrolls/remove-receipt", err);
+    res.status(500).json({ error: "No se pudo quitar el recibo de la planilla" });
+  }
+});
+
 // ---- Gastos
 app.post("/expenses", auth, async (req, res) => {
   try {
