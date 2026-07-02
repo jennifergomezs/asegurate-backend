@@ -352,9 +352,9 @@ function calculateReceiptAmounts(client, serviceValue = 0, independentServiceTyp
       },
     };
   }
-
-  const epsRate = type === "AGRUPADO" ? 0.04 : 0.125;
-  const ccfRate = type === "AGRUPADO" ? 0.04 : 0.02;
+  
+const epsRate = type === "AGRUPADO" ? 0.04 : 0.125;
+const ccfRate = type === "AGRUPADO" ? 0.04 : 0.02;
 
   const eps = isNoAplica(client.eps) ? 0 : roundToHundred(base * epsRate);
   const afp = isNoAplica(client.afp) ? 0 : roundToHundred(base * 0.16);
