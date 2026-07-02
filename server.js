@@ -721,6 +721,28 @@ app.put("/payrolls/register", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
+app.get("/payrolls", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  try {
+    const query = {
+      planillaStatus: "PLANILLA PAGADA",
+    };
+
+    if (req.user.role !== "ADMIN") {
+      query.registeredBy = req.user.name;
+    }
+
+    const payrolls = await Receipt.find(query).sort({
+      planillaPaymentDate: -1,
+      createdAt: -1,
+    });
+
+    res.json(payrolls);
+  } catch (e) {
+    console.error("ERROR GET /payrolls", e);
+    res.status(500).json({ error: "No se pudieron cargar las planillas" });
+  }
+});
+
 // ---- Gastos
 app.post("/expenses", auth, async (req, res) => {
   try {
