@@ -862,7 +862,8 @@ app.get("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
       $or:[
         { docNumber: new RegExp(q,"i") },
         { firstName: new RegExp(q,"i") },
-        { lastName: new RegExp(q,"i") }
+        { lastName: new RegExp(q,"i") },
+        { referido: new RegExp(q, "i") }
       ]
     };
   }
