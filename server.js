@@ -598,6 +598,26 @@ app.get("/groups-debug", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
+app.delete("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de recibo inválido" });
+    }
+
+    const deleted = await Receipt.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    res.json({ message: "Recibo eliminado correctamente" });
+  } catch (e) {
+    res.status(500).json({ error: "No se pudo eliminar el recibo" });
+  }
+});
+
 
 // Anular recibo
 app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
