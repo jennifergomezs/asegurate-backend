@@ -863,7 +863,7 @@ app.get("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
         { docNumber: new RegExp(q,"i") },
         { firstName: new RegExp(q,"i") },
         { lastName: new RegExp(q,"i") },
-        { referido: new RegExp(q, "i") }
+        { ref:   new RegExp(q, "i") }
       ]
     };
   }
