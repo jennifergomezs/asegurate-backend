@@ -165,6 +165,8 @@ groupNit: {
 const receiptSchema = new mongoose.Schema({
   ticket: { type: Number, unique: true, index: true },
 
+  publicCode: { type: String, unique: true, sparse: true, index: true },
+
   tempNumber: { type: String, default: "TEMP" },
 
   createdAt: { type: Date, default: Date.now },
@@ -306,6 +308,18 @@ async function nextTicket(){
   );
   return ret.seq;
 }
+
+function makePublicCode(length = 10) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+
+  for (let i = 0; i < length; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+
+  return code;
+}
+
 function calcAmounts(planType, risk, isOver55){
   const key = (Number(planType)===4 && Boolean(isOver55)) ? 0 : Number(risk);
   const t = tarifas[Number(planType)]?.[key];
@@ -1004,9 +1018,16 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
     const ticket = await nextTicket();
     const now = new Date();
 
+    let publicCode = makePublicCode();
+
+while (await Receipt.findOne({ publicCode })) {
+  publicCode = makePublicCode();
+}
+
     const receipt = await Receipt.create({
       ticket,
       tempNumber: String(ticket),
+      publicCode,
 
       createdAt: now,
       createdDate: now.toLocaleDateString("es-CO"),
@@ -1079,6 +1100,23 @@ app.get("/receipts/client/:clientId", auth, allow("ADMIN", "ASESOR"), async (req
     res.json(list);
   } catch (e) {
     res.status(500).json({ error: "No se pudieron cargar los recibos del cliente" });
+  }
+});
+
+app.get("/public/receipts/:publicCode", async (req, res) => {
+  try {
+    const { publicCode } = req.params;
+
+    const receipt = await Receipt.findOne({ publicCode });
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+
+    res.json(receipt);
+  } catch (e) {
+    console.error("ERROR GET /public/receipts/:publicCode", e);
+    res.status(500).json({ error: "No se pudo cargar el recibo público" });
   }
 });
 
