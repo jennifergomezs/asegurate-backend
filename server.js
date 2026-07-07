@@ -1107,7 +1107,12 @@ app.get("/public/receipts/:publicCode", async (req, res) => {
   try {
     const { publicCode } = req.params;
 
-    const receipt = await Receipt.findOne({ publicCode });
+    let receipt = await Receipt.findOne({ publicCode });
+
+    if (!receipt && publicCode.startsWith("R-")) {
+      const ticket = Number(publicCode.replace("R-", ""));
+      receipt = await Receipt.findOne({ ticket });
+    }
 
     if (!receipt) {
       return res.status(404).json({ error: "Recibo no encontrado" });
