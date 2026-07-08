@@ -1011,7 +1011,7 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 const safeAmounts = {
   ...amounts,
   received,
-  balance: Number(amounts.totalSystem || 0) - received,
+  balance: Number(amounts?.totalSystem || 0) - received,
 };
 
 const calculated = {
