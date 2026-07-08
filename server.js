@@ -1006,14 +1006,17 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
     }
 
     const serviceValueFromReceipt = Number(amounts?.service || client.serviceValue || 0);
-    const calculated = calculateReceiptAmounts(client, serviceValueFromReceipt, independentServiceType);
     const received = Number(amounts?.received || 0);
-    const balance = calculated.amounts.totalSystem - received;
-    const safeAmounts = {
-      ...calculated.amounts,
-      received,
-      balance,
-    };
+
+const safeAmounts = {
+  ...amounts,
+  received,
+  balance: Number(amounts.totalSystem || 0) - received,
+};
+
+const calculated = {
+  code: planCode,
+};
 
     const ticket = await nextTicket();
     const now = new Date();
