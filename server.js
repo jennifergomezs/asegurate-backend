@@ -1121,16 +1121,26 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 
         note: note || "",
 
-        // Si es servicio ocasional de PAGO DE PLANILLA, debe aparecer en el módulo Planillas
-        // y sumar en los informes como planilla pagada.
         planillaStatus:
-          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
+          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA" && planillaValue > 0
             ? "PLANILLA PAGADA"
-            : (planillaStatus || "NO APLICA"),
-        planillaNumber: planillaNumber || "",
-        planillaPaymentDate: planillaPaymentDate || now.toISOString().slice(0, 10),
-        operator: operator || "",
-        bank: bank || "",
+            : "NO APLICA",
+        planillaNumber:
+          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
+            ? String(planillaNumber || "")
+            : "",
+        planillaPaymentDate:
+          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
+            ? String(planillaPaymentDate || "")
+            : "",
+        operator:
+          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
+            ? String(operator || "")
+            : "",
+        bank:
+          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
+            ? String(bank || "")
+            : "",
       });
 
       return res.json(receipt);
