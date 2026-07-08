@@ -253,6 +253,8 @@ const receiptSchema = new mongoose.Schema({
 
   operator: { type: String, default: "" },
   bank: { type: String, default: "" },
+  planillaLateFee: { type: Number, default: 0 },
+  planillaTotalPaid: { type: Number, default: 0 },
 
   cancelledAt: { type: Date, default: null },
   cancelledBy: { type: String, default: "" },
@@ -710,7 +712,7 @@ app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
 // ---- Planillas
 app.put("/payrolls/register", auth, allow("ADMIN" , "ASESOR" ), async (req, res) => {
   try {
-    const { receiptIds, planillaNumber, paymentDate, operator, bank } = req.body;
+    const { receiptIds, planillaNumber, paymentDate, operator, bank, lateFee, totalPaid } = req.body;
 
     if (!receiptIds || !Array.isArray(receiptIds) || receiptIds.length === 0) {
       return res.status(400).json({ error: "Debes seleccionar al menos un recibo" });
@@ -735,6 +737,8 @@ app.put("/payrolls/register", auth, allow("ADMIN" , "ASESOR" ), async (req, res)
           planillaPaymentDate: String(paymentDate || ""),
           operator: String(operator || ""),
           bank: String(bank || ""),
+          planillaLateFee: Number(lateFee || 0),
+          planillaTotalPaid: Number(totalPaid || 0),
         },
       }
     );
@@ -793,6 +797,8 @@ app.put("/payrolls/remove-receipt", auth, allow("ADMIN"), async (req, res) => {
           planillaPaymentDate: "",
           operator: "",
           bank: "",
+          planillaLateFee: 0,
+          planillaTotalPaid: 0,
         },
       },
       { new: true }
@@ -871,6 +877,8 @@ app.put("/payrolls/update", auth, allow("ADMIN") , async (req, res) => {
       paymentDate,
       operator,
       bank,
+      lateFee,
+      totalPaid,
     } = req.body;
 
     if (!oldPlanillaNumber) {
@@ -895,6 +903,8 @@ app.put("/payrolls/update", auth, allow("ADMIN") , async (req, res) => {
           planillaPaymentDate: String(paymentDate || ""),
           operator: String(operator || ""),
           bank: String(bank || ""),
+          planillaLateFee: Number(lateFee || 0),
+          planillaTotalPaid: Number(totalPaid || 0),
         },
       }
     );
@@ -1009,6 +1019,8 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       planillaPaymentDate,
       operator,
       bank,
+      lateFee,
+      totalPaid,
     } = req.body;
 
     const normalizedReceiptType = String(receiptType || "CLIENTE").toUpperCase();
@@ -1121,26 +1133,11 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 
         note: note || "",
 
-        planillaStatus:
-          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA" && planillaValue > 0
-            ? "PLANILLA PAGADA"
-            : "NO APLICA",
-        planillaNumber:
-          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
-            ? String(planillaNumber || "")
-            : "",
-        planillaPaymentDate:
-          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
-            ? String(planillaPaymentDate || "")
-            : "",
-        operator:
-          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
-            ? String(operator || "")
-            : "",
-        bank:
-          String(occasionalServiceType || "").toUpperCase() === "PAGO_PLANILLA"
-            ? String(bank || "")
-            : "",
+        planillaStatus: planillaStatus || "NO APLICA",
+        planillaNumber: planillaNumber || "",
+        planillaPaymentDate: planillaPaymentDate || "",
+        operator: operator || "",
+        bank: bank || "",
       });
 
       return res.json(receipt);
