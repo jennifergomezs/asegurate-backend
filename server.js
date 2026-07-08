@@ -180,11 +180,29 @@ const receiptSchema = new mongoose.Schema({
   year: { type: String, default: "" },
   monthLabel: { type: String, required: true },
 
+  receiptType: {
+    type: String,
+    enum: ["CLIENTE", "OCASIONAL"],
+    default: "CLIENTE",
+  },
+
   paymentMethod: { type: String, required: true },
+  paymentBank: { type: String, default: "" },
+  paymentReference: { type: String, default: "" },
+
   serviceType: { type: String, default: "MENSUALIDAD" },
+  occasionalServiceType: { type: String, default: "" },
   independentServiceType: { type: String, default: "" },
 
-  clientId: { type: mongoose.Schema.Types.ObjectId, ref: "Client", required: true },
+  clientId: { type: mongoose.Schema.Types.ObjectId, ref: "Client", required: false, default: null },
+
+  occasionalCustomer: {
+    name: { type: String, default: "" },
+    docType: { type: String, default: "CC" },
+    docNumber: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    email: { type: String, default: "" },
+  },
 
   clientSnapshot: {
     fullName: String,
@@ -215,6 +233,7 @@ const receiptSchema = new mongoose.Schema({
     afp: { type: Number, default: 0 },
     cofrem: { type: Number, default: 0 },
     service: { type: Number, default: 0 },
+    planillaValue: { type: Number, default: 0 },
     totalSystem: { type: Number, default: 0 },
     received: { type: Number, default: 0 },
     balance: { type: Number, default: 0 },
@@ -968,20 +987,149 @@ app.delete("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
 app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   try {
     const {
+      receiptType = "CLIENTE",
       clientId,
       month,
       year,
       monthLabel,
       paymentMethod,
+      paymentBank,
+      paymentReference,
       serviceType,
+      occasionalServiceType,
       independentServiceType,
+      occasionalCustomer,
       clientSnapshot,
       planCode,
       amounts,
       status,
       note,
       planillaStatus,
+      planillaNumber,
+      planillaPaymentDate,
+      operator,
+      bank,
     } = req.body;
+
+    const normalizedReceiptType = String(receiptType || "CLIENTE").toUpperCase();
+
+    if (!month || !year || !monthLabel) {
+      return res.status(400).json({ error: "Debes seleccionar mes y año" });
+    }
+
+    if (!paymentMethod) {
+      return res.status(400).json({ error: "Debes seleccionar una forma de pago" });
+    }
+
+    const ticket = await nextTicket();
+    const now = new Date();
+
+    let publicCode = makePublicCode();
+
+    while (await Receipt.findOne({ publicCode })) {
+      publicCode = makePublicCode();
+    }
+
+    if (normalizedReceiptType === "OCASIONAL") {
+      const customerName = String(occasionalCustomer?.name || "").trim();
+      const received = Number(amounts?.received || 0);
+      const planillaValue = Number(amounts?.planillaValue || 0);
+      const service = Number(amounts?.service || 0);
+      const totalSystem = Number(amounts?.totalSystem ?? (planillaValue + service));
+      const balance = totalSystem - received;
+
+      if (!customerName) {
+        return res.status(400).json({ error: "Debes escribir el nombre o empresa del servicio ocasional" });
+      }
+
+      if (received <= 0) {
+        return res.status(400).json({ error: "El valor recibido debe ser mayor a cero" });
+      }
+
+      const receipt = await Receipt.create({
+        ticket,
+        tempNumber: String(ticket),
+        publicCode,
+
+        createdAt: now,
+        createdDate: now.toLocaleDateString("es-CO"),
+        createdTime: now.toLocaleTimeString("es-CO"),
+
+        registeredBy: req.user.name,
+        registeredRole: req.user.role,
+
+        receiptType: "OCASIONAL",
+
+        month,
+        year,
+        monthLabel,
+
+        paymentMethod,
+        paymentBank: paymentBank || "",
+        paymentReference: paymentReference || "",
+
+        serviceType: "SERVICIO_OCASIONAL",
+        occasionalServiceType: occasionalServiceType || "PAGO_PLANILLA",
+        independentServiceType: "",
+
+        clientId: null,
+
+        occasionalCustomer: {
+          name: customerName,
+          docType: occasionalCustomer?.docType || "CC",
+          docNumber: occasionalCustomer?.docNumber || "",
+          phone: occasionalCustomer?.phone || "",
+          email: occasionalCustomer?.email || "",
+        },
+
+        clientSnapshot: {
+          fullName: customerName,
+          docType: occasionalCustomer?.docType || "CC",
+          docNumber: occasionalCustomer?.docNumber || "",
+          phone: occasionalCustomer?.phone || "",
+          email: occasionalCustomer?.email || "",
+          clientType: "OCASIONAL",
+          groupName: "",
+          companyName: "",
+          eps: "",
+          afp: "",
+          arl: "",
+          ccf: "",
+          plan: "",
+          risk: "",
+          over55: "",
+        },
+
+        planCode: "SERVICIO-OCASIONAL",
+
+        amounts: {
+          salaryBase: 0,
+          proportionalBase: 0,
+          daysWorked: 0,
+          eps: 0,
+          arl: 0,
+          afp: 0,
+          cofrem: 0,
+          planillaValue,
+          service,
+          totalSystem,
+          received,
+          balance,
+        },
+
+        status: balance > 0 ? "SALDO PENDIENTE" : (status || "PAGADO"),
+
+        note: note || "",
+
+        planillaStatus: planillaStatus || "NO APLICA",
+        planillaNumber: planillaNumber || "",
+        planillaPaymentDate: planillaPaymentDate || "",
+        operator: operator || "",
+        bank: bank || "",
+      });
+
+      return res.json(receipt);
+    }
 
     if (!clientId || !isValidObjectId(clientId)) {
       return res.status(400).json({ error: "Cliente inválido" });
@@ -1005,27 +1153,17 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       });
     }
 
-    const serviceValueFromReceipt = Number(amounts?.service || client.serviceValue || 0);
     const received = Number(amounts?.received || 0);
 
-const safeAmounts = {
-  ...amounts,
-  received,
-  balance: Number(amounts?.totalSystem || 0) - received,
-};
+    const safeAmounts = {
+      ...amounts,
+      received,
+      balance: Number(amounts?.totalSystem || 0) - received,
+    };
 
-const calculated = {
-  code: planCode,
-};
-
-    const ticket = await nextTicket();
-    const now = new Date();
-
-    let publicCode = makePublicCode();
-
-while (await Receipt.findOne({ publicCode })) {
-  publicCode = makePublicCode();
-}
+    const calculated = {
+      code: planCode,
+    };
 
     const receipt = await Receipt.create({
       ticket,
@@ -1039,11 +1177,16 @@ while (await Receipt.findOne({ publicCode })) {
       registeredBy: req.user.name,
       registeredRole: req.user.role,
 
+      receiptType: "CLIENTE",
+
       month,
       year,
       monthLabel,
 
       paymentMethod,
+      paymentBank: paymentBank || "",
+      paymentReference: paymentReference || "",
+
       serviceType,
       independentServiceType,
 
@@ -1073,6 +1216,10 @@ while (await Receipt.findOne({ publicCode })) {
       status: safeAmounts.balance > 0 ? "SALDO PENDIENTE" : (status || "PAGADO"),
       note: note || "",
       planillaStatus: planillaStatus || "PENDIENTE DE PLANILLA",
+      planillaNumber: planillaNumber || "",
+      planillaPaymentDate: planillaPaymentDate || "",
+      operator: operator || "",
+      bank: bank || "",
     });
 
     res.json(receipt);
@@ -1183,12 +1330,21 @@ app.put("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
       0
     );
 
-    const totalSystem =
-      Number(receipt.amounts?.eps || 0) +
-      Number(receipt.amounts?.arl || 0) +
-      Number(receipt.amounts?.afp || 0) +
-      Number(receipt.amounts?.cofrem || 0) +
-      service;
+    const planillaValue = Number(
+      req.body.amounts?.planillaValue ??
+      receipt.amounts?.planillaValue ??
+      0
+    );
+
+    const isOccasional = String(receipt.receiptType || "").toUpperCase() === "OCASIONAL";
+
+    const totalSystem = isOccasional
+      ? planillaValue + service
+      : Number(receipt.amounts?.eps || 0) +
+        Number(receipt.amounts?.arl || 0) +
+        Number(receipt.amounts?.afp || 0) +
+        Number(receipt.amounts?.cofrem || 0) +
+        service;
 
     const balance = totalSystem - received;
 
@@ -1196,7 +1352,14 @@ app.put("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
       id,
       {
         paymentMethod,
+        paymentBank: req.body.paymentBank ?? receipt.paymentBank,
+        paymentReference: req.body.paymentReference ?? receipt.paymentReference,
         note,
+        planillaNumber: req.body.planillaNumber ?? receipt.planillaNumber,
+        planillaPaymentDate: req.body.planillaPaymentDate ?? receipt.planillaPaymentDate,
+        operator: req.body.operator ?? receipt.operator,
+        bank: req.body.bank ?? receipt.bank,
+        "amounts.planillaValue": planillaValue,
         "amounts.service": service,
         "amounts.totalSystem": totalSystem,
         "amounts.received": received,
