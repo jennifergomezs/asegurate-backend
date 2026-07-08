@@ -1070,7 +1070,7 @@ while (await Receipt.findOne({ publicCode })) {
       planCode: calculated.code,
       amounts: safeAmounts,
 
-      status: balance > 0 ? "SALDO PENDIENTE" : (status || "PAGADO"),
+      status: safeAmounts.balance > 0 ? "SALDO PENDIENTE" : (status || "PAGADO"),
       note: note || "",
       planillaStatus: planillaStatus || "PENDIENTE DE PLANILLA",
     });
