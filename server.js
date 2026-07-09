@@ -820,7 +820,7 @@ app.post("/expenses", auth, async (req, res) => {
   try {
     const expense = await Expense.create({
       ...req.body,
-      createdBy: req.user.id,
+      createdBy: req.user.uid,
       createdByName: req.user.name,
     });
 
