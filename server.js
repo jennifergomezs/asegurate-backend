@@ -602,6 +602,12 @@ app.put("/groups/:id", auth, allow("ADMIN"), async (req, res) => {
       return res.status(400).json({ error: "ID inválido" });
     }
 
+    const previousGroup = await Group.findById(id);
+
+    if (!previousGroup) {
+      return res.status(404).json({ error: "Agrupadora no encontrada" });
+    }
+
     const group = await Group.findByIdAndUpdate(
       id,
       req.body,
@@ -611,9 +617,23 @@ app.put("/groups/:id", auth, allow("ADMIN"), async (req, res) => {
       }
     );
 
-    if (!group) {
-      return res.status(404).json({ error: "Agrupadora no encontrada" });
-    }
+    await Client.updateMany(
+      {
+        $or: [
+          { groupNit: previousGroup.nit },
+          {
+            groupNit: "",
+            groupName: previousGroup.name,
+          },
+        ],
+      },
+      {
+        $set: {
+          groupName: group.name,
+          groupNit: group.nit,
+        },
+      }
+    );
 
     res.json(group);
   } catch (err) {
