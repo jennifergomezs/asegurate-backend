@@ -98,6 +98,14 @@ const reminderSchema = new mongoose.Schema({
   visibleToAdvisors: { type: Boolean, default: false },
   active: { type: Boolean, default: true },
   completionPeriods: { type: [String], default: [] },
+  completionRecords: {
+    type: [{
+      period: { type: String, required: true },
+      completedBy: { type: String, default: "" },
+      completedAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
   createdByName: { type: String, default: "" },
 }, { timestamps: true });
 
@@ -910,7 +918,7 @@ app.put("/reminders/:id", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
-app.put("/reminders/:id/complete", auth, allow("ADMIN"), async (req, res) => {
+app.put("/reminders/:id/complete", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
   try {
     if (!isValidObjectId(req.params.id)) {
       return res.status(400).json({ error: "ID de recordatorio inválido" });
@@ -919,17 +927,36 @@ app.put("/reminders/:id/complete", auth, allow("ADMIN"), async (req, res) => {
     const reminder = await Reminder.findById(req.params.id);
     if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
 
+    if (req.user.role !== "ADMIN" && (!reminder.active || !reminder.visibleToAdvisors)) {
+      return res.status(403).json({ error: "Tarea no disponible" });
+    }
+
     const period = String(req.body.period || "").trim();
     if (!period) return res.status(400).json({ error: "Periodo requerido" });
 
     const completed = reminder.completionPeriods.includes(period);
-    reminder.completionPeriods = completed
-      ? reminder.completionPeriods.filter((item) => item !== period)
-      : [...reminder.completionPeriods, period];
+
+    if (completed) {
+      reminder.completionPeriods = reminder.completionPeriods.filter((item) => item !== period);
+      reminder.completionRecords = (reminder.completionRecords || []).filter(
+        (item) => item.period !== period
+      );
+    } else {
+      reminder.completionPeriods = [...reminder.completionPeriods, period];
+      reminder.completionRecords = [
+        ...(reminder.completionRecords || []).filter((item) => item.period !== period),
+        {
+          period,
+          completedBy: req.user.name,
+          completedAt: new Date(),
+        },
+      ];
+    }
 
     await reminder.save();
     res.json(reminder);
   } catch (e) {
+    console.error("ERROR PUT /reminders/:id/complete", e);
     res.status(500).json({ error: "No se pudo cambiar el estado del recordatorio" });
   }
 });
