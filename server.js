@@ -79,6 +79,28 @@ const expenseSchema = new mongoose.Schema({
   createdByName: { type: String, default: "" },
 }, { timestamps: true });
 
+const reminderSchema = new mongoose.Schema({
+  title: { type: String, required: true, trim: true },
+  description: { type: String, default: "" },
+  category: {
+    type: String,
+    enum: ["ARRIENDO", "SERVICIOS", "INTERNET", "IMPUESTOS", "NOMINA", "BANCOS", "PLANILLAS", "OTROS"],
+    default: "OTROS",
+  },
+  amount: { type: Number, default: 0 },
+  recurrence: {
+    type: String,
+    enum: ["UNA_VEZ", "MENSUAL", "ANUAL"],
+    default: "MENSUAL",
+  },
+  dueDate: { type: String, default: "" },
+  dayOfMonth: { type: Number, min: 1, max: 31, default: 1 },
+  visibleToAdvisors: { type: Boolean, default: false },
+  active: { type: Boolean, default: true },
+  completionPeriods: { type: [String], default: [] },
+  createdByName: { type: String, default: "" },
+}, { timestamps: true });
+
 const groupSchema = new mongoose.Schema({
   nit: { type: String, required: true, unique: true, trim: true },
   name: { type: String, required: true, trim: true },
@@ -270,6 +292,7 @@ const Client = mongoose.model("Client", clientSchema);
 const Receipt = mongoose.model("Receipt", receiptSchema);
 const Counter = mongoose.model("Counter", counterSchema);
 const Expense = mongoose.model("Expense", expenseSchema);
+const Reminder = mongoose.model("Reminder", reminderSchema);
 
 // =========================
 // 3) Tarifas (tu tabla)
@@ -835,6 +858,96 @@ app.put("/payrolls/remove-receipt", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
+
+// ---- Recordatorios del Dashboard
+app.get("/reminders", auth, async (req, res) => {
+  try {
+    const query = req.user.role === "ADMIN"
+      ? {}
+      : { active: true, visibleToAdvisors: true };
+
+    const reminders = await Reminder.find(query).sort({ dayOfMonth: 1, createdAt: -1 });
+    res.json(reminders);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudieron cargar los recordatorios" });
+  }
+});
+
+app.post("/reminders", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const reminder = await Reminder.create({
+      ...req.body,
+      amount: Number(req.body.amount || 0),
+      dayOfMonth: Number(req.body.dayOfMonth || 1),
+      createdByName: req.user.name,
+    });
+    res.json(reminder);
+  } catch (e) {
+    res.status(400).json({ error: e.message || "No se pudo crear el recordatorio" });
+  }
+});
+
+app.put("/reminders/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "ID de recordatorio inválido" });
+    }
+
+    const reminder = await Reminder.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...req.body,
+        amount: Number(req.body.amount || 0),
+        dayOfMonth: Number(req.body.dayOfMonth || 1),
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    res.json(reminder);
+  } catch (e) {
+    res.status(400).json({ error: e.message || "No se pudo actualizar el recordatorio" });
+  }
+});
+
+app.put("/reminders/:id/complete", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "ID de recordatorio inválido" });
+    }
+
+    const reminder = await Reminder.findById(req.params.id);
+    if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+
+    const period = String(req.body.period || "").trim();
+    if (!period) return res.status(400).json({ error: "Periodo requerido" });
+
+    const completed = reminder.completionPeriods.includes(period);
+    reminder.completionPeriods = completed
+      ? reminder.completionPeriods.filter((item) => item !== period)
+      : [...reminder.completionPeriods, period];
+
+    await reminder.save();
+    res.json(reminder);
+  } catch (e) {
+    res.status(500).json({ error: "No se pudo cambiar el estado del recordatorio" });
+  }
+});
+
+app.delete("/reminders/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: "ID de recordatorio inválido" });
+    }
+
+    const reminder = await Reminder.findByIdAndDelete(req.params.id);
+    if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    res.json({ message: "Recordatorio eliminado correctamente" });
+  } catch (e) {
+    res.status(500).json({ error: "No se pudo eliminar el recordatorio" });
+  }
+});
+
 // ---- Gastos
 app.post("/expenses", auth, async (req, res) => {
   try {
@@ -947,92 +1060,6 @@ app.post("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   } catch (e) {
     console.error("ERROR POST /clients", e);
     res.status(400).json({ error: e.message || "Datos inválidos" });
-  }
-});
-
-app.get("/clients/paginated", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
-  try {
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = 50;
-    const q = String(req.query.search || "").trim();
-    const status = String(req.query.status || "TODOS").trim().toUpperCase();
-    const clientType = String(req.query.clientType || "TODOS").trim().toUpperCase();
-    const eps = String(req.query.eps || "TODOS").trim();
-    const groupName = String(req.query.groupName || "TODOS").trim();
-
-    const escapeRegExp = (value) =>
-      String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-    const filter = {};
-
-    if (q) {
-      const searchRegex = new RegExp(escapeRegExp(q), "i");
-      filter.$or = [
-        { docNumber: searchRegex },
-        { firstName: searchRegex },
-        { secondName: searchRegex },
-        { lastName: searchRegex },
-        { secondLastName: searchRegex },
-        { phone: searchRegex },
-        { eps: searchRegex },
-        { groupName: searchRegex },
-        { ref: searchRegex },
-      ];
-    }
-
-    if (status !== "TODOS") filter.status = status;
-    if (clientType !== "TODOS") filter.clientType = clientType;
-    if (eps !== "TODOS") filter.eps = eps;
-    if (groupName !== "TODOS") filter.groupName = groupName;
-
-    const [rows, total, epsList, groupList, statsResult] = await Promise.all([
-      Client.find(filter)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit),
-      Client.countDocuments(filter),
-      Client.distinct("eps", { eps: { $nin: ["", null] } }),
-      Client.distinct("groupName", { groupName: { $nin: ["", null] } }),
-      Client.aggregate([
-        {
-          $group: {
-            _id: null,
-            active: { $sum: { $cond: [{ $eq: ["$status", "ACTIVO"] }, 1, 0] } },
-            retired: { $sum: { $cond: [{ $eq: ["$status", "RETIRADO"] }, 1, 0] } },
-            grouped: { $sum: { $cond: [{ $eq: ["$clientType", "AGRUPADO"] }, 1, 0] } },
-            independent: { $sum: { $cond: [{ $eq: ["$clientType", "INDEPENDIENTE"] }, 1, 0] } },
-            companies: { $sum: { $cond: [{ $eq: ["$clientType", "EMPRESA"] }, 1, 0] } },
-          },
-        },
-      ]),
-    ]);
-
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    const stats = statsResult[0] || {
-      active: 0,
-      retired: 0,
-      grouped: 0,
-      independent: 0,
-      companies: 0,
-    };
-
-    res.json({
-      rows,
-      pagination: {
-        page: Math.min(page, totalPages),
-        limit,
-        total,
-        totalPages,
-      },
-      options: {
-        eps: epsList.sort((a, b) => String(a).localeCompare(String(b))),
-        groups: groupList.sort((a, b) => String(a).localeCompare(String(b))),
-      },
-      stats,
-    });
-  } catch (error) {
-    console.error("ERROR GET /clients/paginated", error);
-    res.status(500).json({ error: "No se pudieron cargar los clientes" });
   }
 });
 
