@@ -950,6 +950,92 @@ app.post("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   }
 });
 
+app.get("/clients/paginated", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = 50;
+    const q = String(req.query.search || "").trim();
+    const status = String(req.query.status || "TODOS").trim().toUpperCase();
+    const clientType = String(req.query.clientType || "TODOS").trim().toUpperCase();
+    const eps = String(req.query.eps || "TODOS").trim();
+    const groupName = String(req.query.groupName || "TODOS").trim();
+
+    const escapeRegExp = (value) =>
+      String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const filter = {};
+
+    if (q) {
+      const searchRegex = new RegExp(escapeRegExp(q), "i");
+      filter.$or = [
+        { docNumber: searchRegex },
+        { firstName: searchRegex },
+        { secondName: searchRegex },
+        { lastName: searchRegex },
+        { secondLastName: searchRegex },
+        { phone: searchRegex },
+        { eps: searchRegex },
+        { groupName: searchRegex },
+        { ref: searchRegex },
+      ];
+    }
+
+    if (status !== "TODOS") filter.status = status;
+    if (clientType !== "TODOS") filter.clientType = clientType;
+    if (eps !== "TODOS") filter.eps = eps;
+    if (groupName !== "TODOS") filter.groupName = groupName;
+
+    const [rows, total, epsList, groupList, statsResult] = await Promise.all([
+      Client.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Client.countDocuments(filter),
+      Client.distinct("eps", { eps: { $nin: ["", null] } }),
+      Client.distinct("groupName", { groupName: { $nin: ["", null] } }),
+      Client.aggregate([
+        {
+          $group: {
+            _id: null,
+            active: { $sum: { $cond: [{ $eq: ["$status", "ACTIVO"] }, 1, 0] } },
+            retired: { $sum: { $cond: [{ $eq: ["$status", "RETIRADO"] }, 1, 0] } },
+            grouped: { $sum: { $cond: [{ $eq: ["$clientType", "AGRUPADO"] }, 1, 0] } },
+            independent: { $sum: { $cond: [{ $eq: ["$clientType", "INDEPENDIENTE"] }, 1, 0] } },
+            companies: { $sum: { $cond: [{ $eq: ["$clientType", "EMPRESA"] }, 1, 0] } },
+          },
+        },
+      ]),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const stats = statsResult[0] || {
+      active: 0,
+      retired: 0,
+      grouped: 0,
+      independent: 0,
+      companies: 0,
+    };
+
+    res.json({
+      rows,
+      pagination: {
+        page: Math.min(page, totalPages),
+        limit,
+        total,
+        totalPages,
+      },
+      options: {
+        eps: epsList.sort((a, b) => String(a).localeCompare(String(b))),
+        groups: groupList.sort((a, b) => String(a).localeCompare(String(b))),
+      },
+      stats,
+    });
+  } catch (error) {
+    console.error("ERROR GET /clients/paginated", error);
+    res.status(500).json({ error: "No se pudieron cargar los clientes" });
+  }
+});
+
 app.get("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   const q = (req.query.search||"").trim();
   let filter = {};
