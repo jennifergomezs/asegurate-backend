@@ -1255,20 +1255,44 @@ app.post("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
 });
 
 app.get("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
-  const q = (req.query.search||"").trim();
-  let filter = {};
-  if(q){
-    filter = {
-      $or:[
-        { docNumber: new RegExp(q,"i") },
-        { firstName: new RegExp(q,"i") },
-        { lastName: new RegExp(q,"i") },
-        { ref:   new RegExp(q, "i") }
-      ]
-    };
+  try {
+    const q = (req.query.search || "").trim();
+    const returnAll = String(req.query.all || "").toLowerCase() === "true";
+
+    let filter = {};
+
+    if (q) {
+      const escapedSearch = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = new RegExp(escapedSearch, "i");
+
+      filter = {
+        $or: [
+          { docNumber: searchRegex },
+          { firstName: searchRegex },
+          { secondName: searchRegex },
+          { lastName: searchRegex },
+          { secondLastName: searchRegex },
+          { phone: searchRegex },
+          { email: searchRegex },
+          { eps: searchRegex },
+          { groupName: searchRegex },
+          { ref: searchRegex },
+        ],
+      };
+    }
+
+    let query = Client.find(filter).sort({ createdAt: -1 });
+
+    if (!returnAll) {
+      query = query.limit(50);
+    }
+
+    const list = await query;
+    res.json(list);
+  } catch (error) {
+    console.error("ERROR GET /clients", error);
+    res.status(500).json({ error: "No se pudieron cargar los clientes" });
   }
-  const list = await Client.find(filter).sort({createdAt:-1}).limit(50);
-  res.json(list);
 });
 
 
