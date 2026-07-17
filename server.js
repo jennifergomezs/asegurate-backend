@@ -980,8 +980,12 @@ app.get("/collection-accounts/:id/payroll-data", auth, allow("ADMIN"), async (re
         arl,
         cofrem,
 
-        planillaValue: Number(item?.total || eps + afp + arl + cofrem),
-        total: Number(item?.total || eps + afp + arl + cofrem),
+        serviceValue: Math.max(
+          0,
+          Number(item?.total || 0) - (eps + afp + arl + cofrem)
+        ),
+        planillaValue: eps + afp + arl + cofrem,
+        total: eps + afp + arl + cofrem,
       };
     });
 
