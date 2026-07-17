@@ -1423,6 +1423,28 @@ app.get("/clients/paginated", auth, allow("ADMIN", "ASESOR"), async (req, res) =
   }
 });
 
+// Obtener un cliente por ID
+app.get("/clients/:id", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID de cliente inválido" });
+    }
+
+    const client = await Client.findById(id);
+
+    if (!client) {
+      return res.status(404).json({ error: "Cliente no encontrado" });
+    }
+
+    res.json(client);
+  } catch (error) {
+    console.error("ERROR GET /clients/:id", error);
+    res.status(500).json({ error: "No se pudo cargar el cliente" });
+  }
+});
+
 // Editar cliente
 app.put("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
   try {
