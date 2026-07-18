@@ -169,18 +169,3 @@ const afp = isNoAplica(client.afp)
     },
   };
 }
-
-
-// =========================
-// 5) Crear / actualizar admin
-// =========================
-(async () => {
-  const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
-
-  await User.findOneAndUpdate(
-    { email: process.env.ADMIN_EMAIL },
-    {
-      name: "Jennifer Gómez",
-      email: process.env.ADMIN_EMAIL,
-      passwordHash: hash,
-      role: "ADMIN",
