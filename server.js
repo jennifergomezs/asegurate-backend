@@ -269,12 +269,6 @@ groupNit: {
   status: { type: String, default: "ACTIVO" },
   ref: { type: String, default: "" },
 
-  billingType: {
-    type: String,
-    enum: ["RECIBO", "CUENTA DE COBRO", "FACTURA", "PAGO POR PLANILLA", "SERVICIO ÚNICO"],
-    default: "RECIBO",
-  },
-
   history: { type: Array, default: [] },
 }, { timestamps: true });
 
@@ -295,27 +289,6 @@ const receiptSchema = new mongoose.Schema({
   month: { type: String, default: "" },
   year: { type: String, default: "" },
   monthLabel: { type: String, required: true },
-
-  // Fechas y periodos separados. monthLabel se conserva por compatibilidad.
-  receiptDate: { type: String, default: "" },
-  paymentDate: { type: String, default: "" },
-  serviceMonth: { type: String, default: "" },
-  serviceYear: { type: String, default: "" },
-  serviceLabel: { type: String, default: "" },
-  healthPeriod: { type: String, default: "" },
-  otherSystemsPeriod: { type: String, default: "" },
-  payrollPeriod: { type: String, default: "" },
-  billingType: {
-    type: String,
-    enum: ["RECIBO", "CUENTA DE COBRO", "FACTURA", "PAGO POR PLANILLA", "SERVICIO ÚNICO"],
-    default: "RECIBO",
-  },
-  paymentSource: { type: String, default: "RECIBO" },
-  collectionAccountId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "CollectionAccount",
-    default: null,
-  },
 
   receiptType: {
     type: String,
@@ -1410,7 +1383,7 @@ app.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
 // ---- Planillas
 app.put("/payrolls/register", auth, allow("ADMIN" , "ASESOR" ), async (req, res) => {
   try {
-    const { receiptIds, planillaNumber, paymentDate, operator, bank, lateFee, totalPaid, payrollPeriod, healthPeriod, otherSystemsPeriod } = req.body;
+    const { receiptIds, planillaNumber, paymentDate, operator, bank, lateFee, totalPaid } = req.body;
 
     if (!receiptIds || !Array.isArray(receiptIds) || receiptIds.length === 0) {
       return res.status(400).json({ error: "Debes seleccionar al menos un recibo" });
@@ -1437,9 +1410,6 @@ app.put("/payrolls/register", auth, allow("ADMIN" , "ASESOR" ), async (req, res)
           bank: String(bank || ""),
           planillaLateFee: Number(lateFee || 0),
           planillaTotalPaid: Number(totalPaid || 0),
-          payrollPeriod: String(payrollPeriod || ""),
-          healthPeriod: String(healthPeriod || ""),
-          otherSystemsPeriod: String(otherSystemsPeriod || ""),
         },
       }
     );
@@ -1500,7 +1470,6 @@ app.put("/payrolls/remove-receipt", auth, allow("ADMIN"), async (req, res) => {
           bank: "",
           planillaLateFee: 0,
           planillaTotalPaid: 0,
-          payrollPeriod: "",
         },
       },
       { new: true }
@@ -1690,9 +1659,6 @@ app.put("/payrolls/update", auth, allow("ADMIN") , async (req, res) => {
       bank,
       lateFee,
       totalPaid,
-      payrollPeriod,
-      healthPeriod,
-      otherSystemsPeriod,
     } = req.body;
 
     if (!oldPlanillaNumber) {
@@ -1719,9 +1685,6 @@ app.put("/payrolls/update", auth, allow("ADMIN") , async (req, res) => {
           bank: String(bank || ""),
           planillaLateFee: Number(lateFee || 0),
           planillaTotalPaid: Number(totalPaid || 0),
-          payrollPeriod: String(payrollPeriod || ""),
-          healthPeriod: String(healthPeriod || ""),
-          otherSystemsPeriod: String(otherSystemsPeriod || ""),
         },
       }
     );
@@ -1993,17 +1956,6 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       month,
       year,
       monthLabel,
-      receiptDate,
-      paymentDate,
-      serviceMonth,
-      serviceYear,
-      serviceLabel,
-      healthPeriod,
-      otherSystemsPeriod,
-      payrollPeriod,
-      billingType,
-      paymentSource,
-      collectionAccountId,
       paymentMethod,
       paymentBank,
       paymentReference,
@@ -2037,16 +1989,6 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 
     const ticket = await nextTicket();
     const now = new Date();
-    const isoToday = now.toISOString().slice(0, 10);
-    const normalizedServiceMonth = String(serviceMonth || month || "");
-    const normalizedServiceYear = String(serviceYear || year || "");
-    const normalizedServiceLabel = String(serviceLabel || monthLabel || `${normalizedServiceMonth}-${normalizedServiceYear}`);
-    const normalizedReceiptDate = String(receiptDate || isoToday);
-    const normalizedPaymentDate = String(paymentDate || normalizedReceiptDate);
-    const normalizedBillingType = String(billingType || "RECIBO").toUpperCase();
-    const safeCollectionAccountId = collectionAccountId && isValidObjectId(collectionAccountId)
-      ? collectionAccountId
-      : null;
 
     let publicCode = makePublicCode();
 
@@ -2087,18 +2029,6 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
         month,
         year,
         monthLabel,
-
-        receiptDate: normalizedReceiptDate,
-        paymentDate: normalizedPaymentDate,
-        serviceMonth: normalizedServiceMonth,
-        serviceYear: normalizedServiceYear,
-        serviceLabel: normalizedServiceLabel,
-        healthPeriod: String(healthPeriod || ""),
-        otherSystemsPeriod: String(otherSystemsPeriod || ""),
-        payrollPeriod: String(payrollPeriod || ""),
-        billingType: normalizedBillingType,
-        paymentSource: String(paymentSource || normalizedBillingType),
-        collectionAccountId: safeCollectionAccountId,
 
         paymentMethod,
         paymentBank: paymentBank || "",
@@ -2179,11 +2109,8 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 
     const existingReceipt = await Receipt.findOne({
       clientId,
+      monthLabel,
       status: { $ne: "ANULADO" },
-      $or: [
-        { serviceLabel: normalizedServiceLabel },
-        { serviceLabel: { $in: ["", null] }, monthLabel },
-      ],
     });
 
     if (existingReceipt) {
@@ -2221,18 +2148,6 @@ app.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       month,
       year,
       monthLabel,
-
-      receiptDate: normalizedReceiptDate,
-      paymentDate: normalizedPaymentDate,
-      serviceMonth: normalizedServiceMonth,
-      serviceYear: normalizedServiceYear,
-      serviceLabel: normalizedServiceLabel,
-      healthPeriod: String(healthPeriod || ""),
-      otherSystemsPeriod: String(otherSystemsPeriod || ""),
-      payrollPeriod: String(payrollPeriod || ""),
-      billingType: normalizedBillingType,
-      paymentSource: String(paymentSource || normalizedBillingType),
-      collectionAccountId: safeCollectionAccountId,
 
       paymentMethod,
       paymentBank: paymentBank || "",
