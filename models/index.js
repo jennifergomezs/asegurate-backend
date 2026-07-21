@@ -15,6 +15,11 @@ const companySchema = new mongoose.Schema({
   city: { type: String, default: "" },
   phone: { type: String, default: "" },
   email: { type: String, default: "" },
+  exonerated: {
+    type: String,
+    enum: ["SI", "NO"],
+    default: "SI",
+  },
   active: { type: Boolean, default: true },
 }, { timestamps: true });
 
@@ -185,8 +190,6 @@ clientType: {
  enum: ["INDEPENDIENTE", "EMPRESA", "AGRUPADO"],
   default: "AGRUPADO" 
 },
-exonerated: { type: String, default: "NO" },
-
 companyName: { 
   type: String, 
   default: "" 
