@@ -31,4 +31,27 @@ router.get("/companies", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 });
 
 
+
+router.put("/companies/:id", auth, allow("ADMIN"), async (req, res) => {
+  try {
+    const company = await Company.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!company) {
+      return res.status(404).json({ error: "Empresa no encontrada" });
+    }
+
+    res.json(company);
+  } catch (e) {
+    console.error("ERROR PUT /companies/:id", e);
+    res.status(400).json({ error: e.message || "No se pudo actualizar la empresa" });
+  }
+});
+
 export default router;
