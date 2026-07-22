@@ -9,11 +9,26 @@ const router = express.Router();
 // ---- Clientes
 router.post("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
   try {
+
+    const existingClient = await Client.findOne({
+      docNumber: String(req.body.docNumber).trim(),
+    });
+
+    if (existingClient) {
+      return res.status(400).json({
+        error: "Ya existe un cliente registrado con ese número de documento.",
+      });
+    }
+
     const c = await Client.create(req.body);
+
     res.json(c);
+
   } catch (e) {
     console.error("ERROR POST /clients", e);
-    res.status(400).json({ error: e.message || "Datos inválidos" });
+    res.status(400).json({
+      error: e.message || "Datos inválidos",
+    });
   }
 });
 
