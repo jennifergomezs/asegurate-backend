@@ -229,6 +229,37 @@ groupNit: {
   history: { type: Array, default: [] },
 }, { timestamps: true });
 
+const receiptPaymentSchema = new mongoose.Schema(
+  {
+    method: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    bank: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    reference: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    amount: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+  },
+  {
+    _id: true,
+  }
+);  
+
 const receiptSchema = new mongoose.Schema({
   ticket: { type: Number, unique: true, index: true },
 
@@ -256,6 +287,11 @@ const receiptSchema = new mongoose.Schema({
   paymentMethod: { type: String, required: true },
   paymentBank: { type: String, default: "" },
   paymentReference: { type: String, default: "" },
+
+  paymentDetails: {
+  type: [receiptPaymentSchema],
+  default: [],
+},
 
   serviceType: { type: String, default: "MENSUALIDAD" },
   occasionalServiceType: { type: String, default: "" },

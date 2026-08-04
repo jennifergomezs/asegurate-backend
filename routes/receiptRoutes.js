@@ -19,6 +19,7 @@ router.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       paymentMethod,
       paymentBank,
       paymentReference,
+      paymentDetails,
       serviceType,
       occasionalServiceType,
       independentServiceType,
@@ -39,13 +40,59 @@ router.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 
     const normalizedReceiptType = String(receiptType || "CLIENTE").toUpperCase();
 
-    if (!month || !year || !monthLabel) {
-      return res.status(400).json({ error: "Debes seleccionar mes y año" });
-    }
+    const normalizedPaymentDetails = Array.isArray(paymentDetails)
+  ? paymentDetails
+      .map((payment) => ({
+        method: String(payment?.method || "").trim().toUpperCase(),
+        bank: String(payment?.bank || "").trim().toUpperCase(),
+        reference: String(payment?.reference || "").trim(),
+        amount: Number(payment?.amount || 0),
+      }))
+      .filter((payment) => payment.method && payment.amount > 0)
+  : [];
 
-    if (!paymentMethod) {
-      return res.status(400).json({ error: "Debes seleccionar una forma de pago" });
-    }
+const paymentsTotal = normalizedPaymentDetails.reduce(
+  (sum, payment) => sum + Number(payment.amount || 0),
+  0
+);
+
+const hasMultiplePayments = normalizedPaymentDetails.length > 1;
+
+const mainPaymentMethod =
+  normalizedPaymentDetails.length > 0
+    ? hasMultiplePayments
+      ? "MIXTO"
+      : normalizedPaymentDetails[0].method
+    : String(paymentMethod || "").trim().toUpperCase();
+
+const mainPaymentBank =
+  normalizedPaymentDetails.length === 1
+    ? normalizedPaymentDetails[0].bank
+    : paymentBank || "";
+
+const mainPaymentReference =
+  normalizedPaymentDetails.length === 1
+    ? normalizedPaymentDetails[0].reference
+    : paymentReference || "";
+
+    if (!mainPaymentMethod) {
+  return res.status(400).json({
+    error: "Debes registrar al menos una forma de pago",
+  });
+}
+
+const invalidBankPayment = normalizedPaymentDetails.find(
+  (payment) =>
+    payment.method !== "EFECTIVO" &&
+    !payment.bank
+);
+
+if (invalidBankPayment) {
+  return res.status(400).json({
+    error: `Debes seleccionar el banco o cuenta para el pago por ${invalidBankPayment.method}`,
+  });
+}
+
 
     const ticket = await nextTicket();
     const now = new Date();
@@ -58,7 +105,10 @@ router.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
 
     if (normalizedReceiptType === "OCASIONAL") {
       const customerName = String(occasionalCustomer?.name || "").trim();
-      const received = Number(amounts?.received || 0);
+      const received =
+  normalizedPaymentDetails.length > 0
+    ? paymentsTotal
+    : Number(amounts?.received || 0);
       const planillaValue = Number(amounts?.planillaValue || 0);
       const service = Number(amounts?.service || 0);
       const totalSystem = Number(amounts?.totalSystem ?? (planillaValue + service));
@@ -90,9 +140,10 @@ router.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
         year,
         monthLabel,
 
-        paymentMethod,
-        paymentBank: paymentBank || "",
-        paymentReference: paymentReference || "",
+        paymentMethod: mainPaymentMethod,
+        paymentBank: mainPaymentBank,
+        paymentReference: mainPaymentReference,
+        paymentDetails: normalizedPaymentDetails,
 
         serviceType: "SERVICIO_OCASIONAL",
         occasionalServiceType: occasionalServiceType || "PAGO_PLANILLA",
@@ -179,7 +230,10 @@ router.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       });
     }
 
-    const received = Number(amounts?.received || 0);
+    const received =
+  normalizedPaymentDetails.length > 0
+    ? paymentsTotal
+    : Number(amounts?.received || 0);
 
     const safeAmounts = {
       ...amounts,
@@ -209,9 +263,10 @@ router.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
       year,
       monthLabel,
 
-      paymentMethod,
-      paymentBank: paymentBank || "",
-      paymentReference: paymentReference || "",
+     paymentMethod: mainPaymentMethod,
+     paymentBank: mainPaymentBank,
+     paymentReference: mainPaymentReference,
+     paymentDetails: normalizedPaymentDetails,
 
       serviceType,
       independentServiceType,
@@ -339,15 +394,57 @@ router.put("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
       return res.status(400).json({ error: "No se puede editar un recibo anulado" });
     }
 
-    const paymentMethod = req.body.paymentMethod || receipt.paymentMethod;
-    const note = req.body.note ?? receipt.note;
+    const requestedPaymentDetails = Array.isArray(req.body.paymentDetails)
+  ? req.body.paymentDetails
+      .map((payment) => ({
+        method: String(payment?.method || "").trim().toUpperCase(),
+        bank: String(payment?.bank || "").trim().toUpperCase(),
+        reference: String(payment?.reference || "").trim(),
+        amount: Number(payment?.amount || 0),
+      }))
+      .filter((payment) => payment.method && payment.amount > 0)
+  : null;
 
-    const received = Number(
-      req.body.amounts?.received ??
-      req.body.received ??
-      receipt.amounts?.received ??
-      0
-    );
+const paymentDetails =
+  requestedPaymentDetails !== null
+    ? requestedPaymentDetails
+    : Array.isArray(receipt.paymentDetails)
+      ? receipt.paymentDetails
+      : [];
+
+const paymentsTotal = paymentDetails.reduce(
+  (sum, payment) => sum + Number(payment.amount || 0),
+  0
+);
+
+const paymentMethod =
+  paymentDetails.length > 1
+    ? "MIXTO"
+    : paymentDetails.length === 1
+      ? paymentDetails[0].method
+      : req.body.paymentMethod || receipt.paymentMethod;
+
+const paymentBank =
+  paymentDetails.length === 1
+    ? paymentDetails[0].bank || ""
+    : "";
+
+const paymentReference =
+  paymentDetails.length === 1
+    ? paymentDetails[0].reference || ""
+    : req.body.paymentReference ?? receipt.paymentReference;
+
+const note = req.body.note ?? receipt.note;
+
+    const received =
+  requestedPaymentDetails !== null
+    ? paymentsTotal
+    : Number(
+        req.body.amounts?.received ??
+        req.body.received ??
+        receipt.amounts?.received ??
+        0
+      );
 
     const service = Number(
       req.body.amounts?.service ??
@@ -365,22 +462,25 @@ router.put("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
     const isOccasional = String(receipt.receiptType || "").toUpperCase() === "OCASIONAL";
 
     const totalSystem = isOccasional
-      ? planillaValue + service
-      : Number(receipt.amounts?.eps || 0) +
-        Number(receipt.amounts?.arl || 0) +
-        Number(receipt.amounts?.afp || 0) +
-        Number(receipt.amounts?.cofrem || 0) +
-        service;
+  ? planillaValue + service
+  : Number(receipt.amounts?.eps || 0) +
+    Number(receipt.amounts?.arl || 0) +
+    Number(receipt.amounts?.afp || 0) +
+    Number(receipt.amounts?.cofrem || 0) +
+    Number(receipt.amounts?.parafiscales || 0) +
+    Number(receipt.amounts?.mora || 0) +
+    service;
 
     const balance = totalSystem - received;
 
     const updated = await Receipt.findByIdAndUpdate(
       id,
-      {
-        paymentMethod,
-        paymentBank: req.body.paymentBank ?? receipt.paymentBank,
-        paymentReference: req.body.paymentReference ?? receipt.paymentReference,
-        note,
+     {
+  paymentMethod,
+  paymentBank,
+  paymentReference,
+  paymentDetails,
+  note,
         planillaNumber: req.body.planillaNumber ?? receipt.planillaNumber,
         planillaPaymentDate: req.body.planillaPaymentDate ?? receipt.planillaPaymentDate,
         operator: req.body.operator ?? receipt.operator,
