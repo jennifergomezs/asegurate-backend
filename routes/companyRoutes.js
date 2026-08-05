@@ -77,16 +77,23 @@ router.put(
       }
 
       const result = await Client.updateMany(
-        {
-          clientType: "AGRUPADO",
-          companyNit: company.nit,
-        },
-        {
-          $set: {
-            serviceValue: String(serviceValue),
-          },
-        }
-      );
+  {
+    clientType: "AGRUPADO",
+    $or: [
+      {
+        companyNit: String(company.nit || "").trim(),
+      },
+      {
+        companyName: company.name,
+      },
+    ],
+  },
+  {
+    $set: {
+      serviceValue: String(serviceValue),
+    },
+  }
+);
 
       company.defaultServiceValue = serviceValue;
       await company.save();
