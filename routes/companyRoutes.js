@@ -1,5 +1,5 @@
 import express from "express";
-import { Company } from "../models/index.js";
+import { Company, Client } from "../models/index.js";
 import { auth, allow } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -53,5 +53,60 @@ router.put("/companies/:id", auth, allow("ADMIN"), async (req, res) => {
     res.status(400).json({ error: e.message || "No se pudo actualizar la empresa" });
   }
 });
+
+router.put(
+  "/companies/:id/update-service",
+  auth,
+  allow("ADMIN"),
+  async (req, res) => {
+    try {
+      const serviceValue = Number(req.body.serviceValue);
+
+      if (!Number.isFinite(serviceValue) || serviceValue < 0) {
+        return res.status(400).json({
+          error: "El valor del servicio debe ser un número válido",
+        });
+      }
+
+      const company = await Company.findById(req.params.id);
+
+      if (!company) {
+        return res.status(404).json({
+          error: "Empresa no encontrada",
+        });
+      }
+
+      const result = await Client.updateMany(
+        {
+          clientType: "AGRUPADO",
+          companyNit: company.nit,
+        },
+        {
+          $set: {
+            serviceValue: String(serviceValue),
+          },
+        }
+      );
+
+      company.defaultServiceValue = serviceValue;
+      await company.save();
+
+      res.json({
+        message: "Valor del servicio actualizado correctamente",
+        updatedClients: result.modifiedCount,
+        matchedClients: result.matchedCount,
+        defaultServiceValue: company.defaultServiceValue,
+      });
+    } catch (e) {
+      console.error("ERROR PUT /companies/:id/update-service", e);
+
+      res.status(400).json({
+        error:
+          e.message ||
+          "No se pudo actualizar el valor del servicio de los afiliados",
+      });
+    }
+  }
+);
 
 export default router;
