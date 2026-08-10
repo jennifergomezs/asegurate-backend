@@ -4,6 +4,26 @@ import { auth, allow } from "../middleware/auth.js";
 
 const router = express.Router();
 
+
+// ======================================================
+// CATÁLOGOS PERMITIDOS
+// ======================================================
+
+const ALLOWED_CATALOGS = [
+  "eps",
+  "afp",
+  "arl",
+  "ccf",
+  "operators",
+  "banks",
+  "paymentMethods",
+];
+
+
+// ======================================================
+// CONFIGURACIÓN INICIAL
+// ======================================================
+
 const DEFAULT_SETTINGS = {
   key: "MAIN",
 
@@ -12,24 +32,98 @@ const DEFAULT_SETTINGS = {
     currentYear: 2026,
   },
 
-  banks: [
-    { name: "BANCOLOMBIA", active: true },
-    { name: "DAVIVIENDA", active: true },
-    { name: "NEQUI", active: true },
-    { name: "OTRO", active: true },
-  ],
+  catalogs: {
+    eps: [],
+    afp: [],
+    arl: [],
+    ccf: [],
+    operators: [],
 
-  paymentMethods: [
-    { name: "EFECTIVO", active: true },
-    { name: "TRANSFERENCIA", active: true },
-    { name: "CONSIGNACIÓN", active: true },
-    { name: "OTRO", active: true },
-  ],
+    banks: [
+      {
+        name: "BANCOLOMBIA",
+        code: "",
+        active: true,
+        order: 1,
+      },
+      {
+        name: "DAVIVIENDA",
+        code: "",
+        active: true,
+        order: 2,
+      },
+      {
+        name: "NEQUI",
+        code: "",
+        active: true,
+        order: 3,
+      },
+      {
+        name: "OTRO",
+        code: "",
+        active: true,
+        order: 4,
+      },
+    ],
+
+    paymentMethods: [
+      {
+        name: "EFECTIVO",
+        code: "",
+        active: true,
+        order: 1,
+      },
+      {
+        name: "TRANSFERENCIA",
+        code: "",
+        active: true,
+        order: 2,
+      },
+      {
+        name: "CONSIGNACIÓN",
+        code: "",
+        active: true,
+        order: 3,
+      },
+      {
+        name: "OTRO",
+        code: "",
+        active: true,
+        order: 4,
+      },
+    ],
+  },
 };
 
 
 // ======================================================
-// OBTENER CONFIGURACIÓN
+// VALIDAR TIPO DE CATÁLOGO
+// ======================================================
+
+function validateCatalogType(type) {
+  return ALLOWED_CATALOGS.includes(type);
+}
+
+
+// ======================================================
+// OBTENER / CREAR CONFIGURACIÓN PRINCIPAL
+// ======================================================
+
+async function getMainSettings() {
+  let settings = await SystemSetting.findOne({
+    key: "MAIN",
+  });
+
+  if (!settings) {
+    settings = await SystemSetting.create(DEFAULT_SETTINGS);
+  }
+
+  return settings;
+}
+
+
+// ======================================================
+// OBTENER TODA LA CONFIGURACIÓN
 // ======================================================
 
 router.get(
@@ -38,20 +132,16 @@ router.get(
   allow("ADMIN"),
   async (req, res) => {
     try {
-      let settings = await SystemSetting.findOne({
-        key: "MAIN",
-      });
-
-      if (!settings) {
-        settings = await SystemSetting.create(DEFAULT_SETTINGS);
-      }
+      const settings = await getMainSettings();
 
       res.json(settings);
     } catch (e) {
       console.error("ERROR GET /settings", e);
 
       res.status(500).json({
-        error: e.message || "No se pudo cargar la configuración",
+        error:
+          e.message ||
+          "No se pudo cargar la configuración",
       });
     }
   }
@@ -68,12 +158,21 @@ router.put(
   allow("ADMIN"),
   async (req, res) => {
     try {
-      const minimumSalary = Number(req.body.minimumSalary);
-      const currentYear = Number(req.body.currentYear);
+      const minimumSalary = Number(
+        req.body.minimumSalary
+      );
 
-      if (!Number.isFinite(minimumSalary) || minimumSalary <= 0) {
+      const currentYear = Number(
+        req.body.currentYear
+      );
+
+      if (
+        !Number.isFinite(minimumSalary) ||
+        minimumSalary <= 0
+      ) {
         return res.status(400).json({
-          error: "El salario mínimo debe ser un número válido",
+          error:
+            "El salario mínimo debe ser un número válido",
         });
       }
 
@@ -87,29 +186,37 @@ router.put(
         });
       }
 
-      const settings = await SystemSetting.findOneAndUpdate(
-        {
-          key: "MAIN",
-        },
-        {
-          $set: {
-            "general.minimumSalary": minimumSalary,
-            "general.currentYear": currentYear,
-          },
-          $setOnInsert: {
+      const settings =
+        await SystemSetting.findOneAndUpdate(
+          {
             key: "MAIN",
           },
-        },
-        {
-          new: true,
-          upsert: true,
-          runValidators: true,
-        }
-      );
+          {
+            $set: {
+              "general.minimumSalary":
+                minimumSalary,
+
+              "general.currentYear":
+                currentYear,
+            },
+
+            $setOnInsert: {
+              key: "MAIN",
+            },
+          },
+          {
+            new: true,
+            upsert: true,
+            runValidators: true,
+          }
+        );
 
       res.json(settings);
     } catch (e) {
-      console.error("ERROR PUT /settings/general", e);
+      console.error(
+        "ERROR PUT /settings/general",
+        e
+      );
 
       res.status(400).json({
         error:
@@ -122,57 +229,45 @@ router.put(
 
 
 // ======================================================
-// AGREGAR BANCO
+// OBTENER UN CATÁLOGO
 // ======================================================
 
-router.post(
-  "/settings/banks",
+router.get(
+  "/settings/catalogs/:type",
   auth,
   allow("ADMIN"),
   async (req, res) => {
     try {
-      const name = String(req.body.name || "")
-        .trim()
-        .toUpperCase();
+      const { type } = req.params;
 
-      if (!name) {
+      if (!validateCatalogType(type)) {
         return res.status(400).json({
-          error: "El nombre del banco es obligatorio",
+          error: "Tipo de catálogo no válido",
         });
       }
 
-      let settings = await SystemSetting.findOne({
-        key: "MAIN",
-      });
+      const settings = await getMainSettings();
 
-      if (!settings) {
-        settings = await SystemSetting.create(DEFAULT_SETTINGS);
-      }
+      const items =
+        settings.catalogs?.[type] || [];
 
-      const exists = settings.banks.some(
-        (bank) =>
-          String(bank.name || "").trim().toUpperCase() === name
+      const orderedItems = [...items].sort(
+        (a, b) =>
+          Number(a.order || 0) -
+          Number(b.order || 0)
       );
 
-      if (exists) {
-        return res.status(400).json({
-          error: "Ese banco ya existe",
-        });
-      }
-
-      settings.banks.push({
-        name,
-        active: true,
-      });
-
-      await settings.save();
-
-      res.json(settings);
+      res.json(orderedItems);
     } catch (e) {
-      console.error("ERROR POST /settings/banks", e);
+      console.error(
+        "ERROR GET /settings/catalogs/:type",
+        e
+      );
 
-      res.status(400).json({
-        error: e.message || "No se pudo agregar el banco",
+      res.status(500).json({
+        error:
+          e.message ||
+          "No se pudo cargar el catálogo",
       });
     }
   }
@@ -180,140 +275,134 @@ router.post(
 
 
 // ======================================================
-// EDITAR / ACTIVAR / INACTIVAR BANCO
-// ======================================================
-
-router.put(
-  "/settings/banks/:id",
-  auth,
-  allow("ADMIN"),
-  async (req, res) => {
-    try {
-      const settings = await SystemSetting.findOne({
-        key: "MAIN",
-      });
-
-      if (!settings) {
-        return res.status(404).json({
-          error: "Configuración no encontrada",
-        });
-      }
-
-      const bank = settings.banks.id(req.params.id);
-
-      if (!bank) {
-        return res.status(404).json({
-          error: "Banco no encontrado",
-        });
-      }
-
-      if (req.body.name !== undefined) {
-        const name = String(req.body.name || "")
-          .trim()
-          .toUpperCase();
-
-        if (!name) {
-          return res.status(400).json({
-            error: "El nombre del banco es obligatorio",
-          });
-        }
-
-        const duplicate = settings.banks.some(
-          (item) =>
-            String(item._id) !== String(bank._id) &&
-            String(item.name || "").trim().toUpperCase() === name
-        );
-
-        if (duplicate) {
-          return res.status(400).json({
-            error: "Ese banco ya existe",
-          });
-        }
-
-        bank.name = name;
-      }
-
-      if (req.body.active !== undefined) {
-        bank.active = Boolean(req.body.active);
-      }
-
-      await settings.save();
-
-      res.json(settings);
-    } catch (e) {
-      console.error("ERROR PUT /settings/banks/:id", e);
-
-      res.status(400).json({
-        error: e.message || "No se pudo actualizar el banco",
-      });
-    }
-  }
-);
-
-
-// ======================================================
-// AGREGAR MEDIO DE PAGO
+// AGREGAR ELEMENTO A UN CATÁLOGO
 // ======================================================
 
 router.post(
-  "/settings/payment-methods",
+  "/settings/catalogs/:type",
   auth,
   allow("ADMIN"),
   async (req, res) => {
     try {
-      const name = String(req.body.name || "")
+      const { type } = req.params;
+
+      if (!validateCatalogType(type)) {
+        return res.status(400).json({
+          error: "Tipo de catálogo no válido",
+        });
+      }
+
+      const name = String(
+        req.body.name || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const code = String(
+        req.body.code || ""
+      )
         .trim()
         .toUpperCase();
 
       if (!name) {
         return res.status(400).json({
-          error: "El medio de pago es obligatorio",
+          error: "El nombre es obligatorio",
         });
       }
 
-      if (name === "MIXTO") {
+      if (
+        type === "paymentMethods" &&
+        name === "MIXTO"
+      ) {
         return res.status(400).json({
-          error: "MIXTO no es un medio de pago",
+          error:
+            "MIXTO no es un medio de pago",
         });
       }
 
-      let settings = await SystemSetting.findOne({
-        key: "MAIN",
-      });
+      const settings = await getMainSettings();
 
-      if (!settings) {
-        settings = await SystemSetting.create(DEFAULT_SETTINGS);
-      }
+      const catalog =
+        settings.catalogs[type];
 
-      const exists = settings.paymentMethods.some(
+      const duplicateName = catalog.some(
         (item) =>
-          String(item.name || "").trim().toUpperCase() === name
+          String(item.name || "")
+            .trim()
+            .toUpperCase() === name
       );
 
-      if (exists) {
+      if (duplicateName) {
         return res.status(400).json({
-          error: "Ese medio de pago ya existe",
+          error:
+            "Ya existe un registro con ese nombre",
         });
       }
 
-      settings.paymentMethods.push({
+      if (code) {
+        const duplicateCode = catalog.some(
+          (item) =>
+            String(item.code || "")
+              .trim()
+              .toUpperCase() === code
+        );
+
+        if (duplicateCode) {
+          return res.status(400).json({
+            error:
+              "Ya existe un registro con ese código",
+          });
+        }
+      }
+
+      let order = Number(req.body.order);
+
+      if (
+        !Number.isInteger(order) ||
+        order < 1
+      ) {
+        const maxOrder = catalog.reduce(
+          (max, item) =>
+            Math.max(
+              max,
+              Number(item.order || 0)
+            ),
+          0
+        );
+
+        order = maxOrder + 1;
+      }
+
+      catalog.push({
         name,
+        code,
         active: true,
+        order,
       });
 
       await settings.save();
 
-      res.json(settings);
+      const updatedCatalog = [
+        ...settings.catalogs[type],
+      ].sort(
+        (a, b) =>
+          Number(a.order || 0) -
+          Number(b.order || 0)
+      );
+
+      res.status(201).json(
+        updatedCatalog
+      );
     } catch (e) {
       console.error(
-        "ERROR POST /settings/payment-methods",
+        "ERROR POST /settings/catalogs/:type",
         e
       );
 
       res.status(400).json({
         error:
           e.message ||
-          "No se pudo agregar el medio de pago",
+          "No se pudo agregar el registro",
       });
     }
   }
@@ -321,86 +410,182 @@ router.post(
 
 
 // ======================================================
-// EDITAR / ACTIVAR / INACTIVAR MEDIO DE PAGO
+// EDITAR / ACTIVAR / INACTIVAR REGISTRO
 // ======================================================
 
 router.put(
-  "/settings/payment-methods/:id",
+  "/settings/catalogs/:type/:id",
   auth,
   allow("ADMIN"),
   async (req, res) => {
     try {
-      const settings = await SystemSetting.findOne({
-        key: "MAIN",
-      });
+      const { type, id } = req.params;
 
-      if (!settings) {
-        return res.status(404).json({
-          error: "Configuración no encontrada",
+      if (!validateCatalogType(type)) {
+        return res.status(400).json({
+          error: "Tipo de catálogo no válido",
         });
       }
 
-      const paymentMethod =
-        settings.paymentMethods.id(req.params.id);
+      const settings = await getMainSettings();
 
-      if (!paymentMethod) {
+      const catalog =
+        settings.catalogs[type];
+
+      const item = catalog.id(id);
+
+      if (!item) {
         return res.status(404).json({
-          error: "Medio de pago no encontrado",
+          error: "Registro no encontrado",
         });
       }
+
+
+      // ==================================================
+      // EDITAR NOMBRE
+      // ==================================================
 
       if (req.body.name !== undefined) {
-        const name = String(req.body.name || "")
+        const name = String(
+          req.body.name || ""
+        )
           .trim()
           .toUpperCase();
 
         if (!name) {
           return res.status(400).json({
-            error: "El medio de pago es obligatorio",
+            error:
+              "El nombre no puede quedar vacío",
           });
         }
 
-        if (name === "MIXTO") {
+        if (
+          type === "paymentMethods" &&
+          name === "MIXTO"
+        ) {
           return res.status(400).json({
-            error: "MIXTO no es un medio de pago",
+            error:
+              "MIXTO no es un medio de pago",
           });
         }
 
-        const duplicate = settings.paymentMethods.some(
-          (item) =>
-            String(item._id) !==
-              String(paymentMethod._id) &&
-            String(item.name || "")
-              .trim()
-              .toUpperCase() === name
-        );
+        const duplicateName =
+          catalog.some(
+            (other) =>
+              String(other._id) !==
+                String(item._id) &&
+              String(other.name || "")
+                .trim()
+                .toUpperCase() === name
+          );
 
-        if (duplicate) {
+        if (duplicateName) {
           return res.status(400).json({
-            error: "Ese medio de pago ya existe",
+            error:
+              "Ya existe un registro con ese nombre",
           });
         }
 
-        paymentMethod.name = name;
+        item.name = name;
       }
 
+
+      // ==================================================
+      // EDITAR CÓDIGO
+      // ==================================================
+
+      if (req.body.code !== undefined) {
+        const code = String(
+          req.body.code || ""
+        )
+          .trim()
+          .toUpperCase();
+
+        if (code) {
+          const duplicateCode =
+            catalog.some(
+              (other) =>
+                String(other._id) !==
+                  String(item._id) &&
+                String(other.code || "")
+                  .trim()
+                  .toUpperCase() === code
+            );
+
+          if (duplicateCode) {
+            return res.status(400).json({
+              error:
+                "Ya existe un registro con ese código",
+            });
+          }
+        }
+
+        item.code = code;
+      }
+
+
+      // ==================================================
+      // EDITAR ORDEN
+      // ==================================================
+
+      if (req.body.order !== undefined) {
+        const order = Number(
+          req.body.order
+        );
+
+        if (
+          !Number.isInteger(order) ||
+          order < 1
+        ) {
+          return res.status(400).json({
+            error:
+              "El orden debe ser un número entero mayor a 0",
+          });
+        }
+
+        item.order = order;
+      }
+
+
+      // ==================================================
+      // ACTIVAR / INACTIVAR
+      // ==================================================
+
       if (req.body.active !== undefined) {
-        paymentMethod.active = Boolean(req.body.active);
+        if (
+          typeof req.body.active !==
+          "boolean"
+        ) {
+          return res.status(400).json({
+            error:
+              "El estado debe ser verdadero o falso",
+          });
+        }
+
+        item.active = req.body.active;
       }
 
       await settings.save();
 
-      res.json(settings);
+      const updatedCatalog = [
+        ...settings.catalogs[type],
+      ].sort(
+        (a, b) =>
+          Number(a.order || 0) -
+          Number(b.order || 0)
+      );
+
+      res.json(updatedCatalog);
     } catch (e) {
       console.error(
-        "ERROR PUT /settings/payment-methods/:id",
+        "ERROR PUT /settings/catalogs/:type/:id",
         e
       );
 
       res.status(400).json({
         error:
           e.message ||
-          "No se pudo actualizar el medio de pago",
+          "No se pudo actualizar el registro",
       });
     }
   }

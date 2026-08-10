@@ -379,9 +379,22 @@ const settingItemSchema = new mongoose.Schema(
       uppercase: true,
     },
 
+    code: {
+      type: String,
+      default: "",
+      trim: true,
+      uppercase: true,
+    },
+
     active: {
       type: Boolean,
       default: true,
+    },
+
+    order: {
+      type: Number,
+      default: 1,
+      min: 1,
     },
   },
   {
@@ -415,24 +428,41 @@ const systemSettingSchema = new mongoose.Schema(
       },
     },
 
-    banks: {
-      type: [settingItemSchema],
-      default: [
-        { name: "BANCOLOMBIA", active: true },
-        { name: "DAVIVIENDA", active: true },
-        { name: "NEQUI", active: true },
-        { name: "OTRO", active: true },
-      ],
-    },
+    catalogs: {
+      eps: {
+        type: [settingItemSchema],
+        default: [],
+      },
 
-    paymentMethods: {
-      type: [settingItemSchema],
-      default: [
-        { name: "EFECTIVO", active: true },
-        { name: "TRANSFERENCIA", active: true },
-        { name: "CONSIGNACIÓN", active: true },
-        { name: "OTRO", active: true },
-      ],
+      afp: {
+        type: [settingItemSchema],
+        default: [],
+      },
+
+      arl: {
+        type: [settingItemSchema],
+        default: [],
+      },
+
+      ccf: {
+        type: [settingItemSchema],
+        default: [],
+      },
+
+      operators: {
+        type: [settingItemSchema],
+        default: [],
+      },
+
+      banks: {
+        type: [settingItemSchema],
+        default: [],
+      },
+
+      paymentMethods: {
+        type: [settingItemSchema],
+        default: [],
+      },
     },
   },
   {
