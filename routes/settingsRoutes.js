@@ -1,5 +1,5 @@
 import express from "express";
-import { SystemSetting } from "../models/index.js";
+import {  SystemSetting,  Client,  Receipt,  CollectionAccount,  CollectionAccountPayroll,} from "../models/index.js";
 import { auth, allow } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -591,5 +591,284 @@ router.put(
   }
 );
 
+// ======================================================
+// IMPORTAR CATÁLOGOS DESDE DATOS EXISTENTES
+// ======================================================
+
+router.post(
+  "/settings/import-existing",
+  auth,
+  allow("ADMIN"),
+  async (req, res) => {
+    try {
+      const settings = await getMainSettings();
+
+      const clients = await Client.find({}).lean();
+
+      const receipts = await Receipt.find({}).lean();
+
+      const collectionAccounts =
+        await CollectionAccount.find({}).lean();
+
+      const collectionPayrolls =
+        await CollectionAccountPayroll.find({}).lean();
+
+
+      // ==================================================
+      // AGREGAR VALOR ÚNICO AL CATÁLOGO
+      // ==================================================
+
+      const addUnique = (type, value) => {
+        const name = String(value || "")
+          .trim()
+          .toUpperCase();
+
+        if (!name) return false;
+
+        if (
+          type === "paymentMethods" &&
+          name === "MIXTO"
+        ) {
+          return false;
+        }
+
+        const catalog = settings.catalogs[type];
+
+        const exists = catalog.some(
+          (item) =>
+            String(item.name || "")
+              .trim()
+              .toUpperCase() === name
+        );
+
+        if (exists) return false;
+
+        const maxOrder = catalog.reduce(
+          (max, item) =>
+            Math.max(
+              max,
+              Number(item.order || 0)
+            ),
+          0
+        );
+
+        catalog.push({
+          name,
+          code: "",
+          active: true,
+          order: maxOrder + 1,
+        });
+
+        return true;
+      };
+
+
+      // ==================================================
+      // CONTADORES
+      // ==================================================
+
+      const imported = {
+        eps: 0,
+        afp: 0,
+        arl: 0,
+        ccf: 0,
+        operators: 0,
+        banks: 0,
+        paymentMethods: 0,
+      };
+
+
+      // ==================================================
+      // CLIENTES
+      // ==================================================
+
+      for (const client of clients) {
+        if (addUnique("eps", client.eps)) {
+          imported.eps++;
+        }
+
+        if (addUnique("afp", client.afp)) {
+          imported.afp++;
+        }
+
+        if (addUnique("arl", client.arl)) {
+          imported.arl++;
+        }
+
+        if (addUnique("ccf", client.ccf)) {
+          imported.ccf++;
+        }
+      }
+
+
+      // ==================================================
+      // RECIBOS
+      // ==================================================
+
+      for (const receipt of receipts) {
+        const snapshot =
+          receipt.clientSnapshot || {};
+
+        if (addUnique("eps", snapshot.eps)) {
+          imported.eps++;
+        }
+
+        if (addUnique("afp", snapshot.afp)) {
+          imported.afp++;
+        }
+
+        if (addUnique("arl", snapshot.arl)) {
+          imported.arl++;
+        }
+
+        if (addUnique("ccf", snapshot.ccf)) {
+          imported.ccf++;
+        }
+
+
+        // MEDIO DE PAGO PRINCIPAL
+        if (
+          addUnique(
+            "paymentMethods",
+            receipt.paymentMethod
+          )
+        ) {
+          imported.paymentMethods++;
+        }
+
+
+        // BANCO PRINCIPAL
+        if (
+          addUnique(
+            "banks",
+            receipt.paymentBank
+          )
+        ) {
+          imported.banks++;
+        }
+
+
+        // PAGOS COMBINADOS
+        for (
+          const payment of
+          receipt.paymentDetails || []
+        ) {
+          if (
+            addUnique(
+              "paymentMethods",
+              payment.method
+            )
+          ) {
+            imported.paymentMethods++;
+          }
+
+          if (
+            addUnique(
+              "banks",
+              payment.bank
+            )
+          ) {
+            imported.banks++;
+          }
+        }
+
+
+        // DATOS DE PLANILLA GUARDADOS EN RECIBO
+        if (
+          addUnique(
+            "operators",
+            receipt.operator
+          )
+        ) {
+          imported.operators++;
+        }
+
+        if (
+          addUnique(
+            "banks",
+            receipt.bank
+          )
+        ) {
+          imported.banks++;
+        }
+      }
+
+
+      // ==================================================
+      // CUENTAS DE COBRO
+      // ==================================================
+
+      for (
+        const account of collectionAccounts
+      ) {
+        for (
+          const payment of account.payments || []
+        ) {
+          if (
+            addUnique(
+              "paymentMethods",
+              payment.method
+            )
+          ) {
+            imported.paymentMethods++;
+          }
+        }
+      }
+
+
+      // ==================================================
+      // PLANILLAS DE CUENTAS DE COBRO
+      // ==================================================
+
+      for (
+        const payroll of collectionPayrolls
+      ) {
+        if (
+          addUnique(
+            "operators",
+            payroll.operator
+          )
+        ) {
+          imported.operators++;
+        }
+
+        if (
+          addUnique(
+            "banks",
+            payroll.bank
+          )
+        ) {
+          imported.banks++;
+        }
+      }
+
+
+      await settings.save();
+
+
+      // ==================================================
+      // RESPUESTA
+      // ==================================================
+
+      res.json({
+        message:
+          "Importación de catálogos completada correctamente",
+        imported,
+        catalogs: settings.catalogs,
+      });
+    } catch (e) {
+      console.error(
+        "ERROR POST /settings/import-existing",
+        e
+      );
+
+      res.status(500).json({
+        error:
+          e.message ||
+          "No se pudieron importar los datos existentes",
+      });
+    }
+  }
+);
 
 export default router;
