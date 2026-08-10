@@ -370,6 +370,75 @@ const receiptSchema = new mongoose.Schema({
   cancelledBy: { type: String, default: "" },
 }, { timestamps: true });
 
+const settingItemSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+    },
+
+    active: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    _id: true,
+  }
+);
+
+const systemSettingSchema = new mongoose.Schema(
+  {
+    key: {
+      type: String,
+      required: true,
+      unique: true,
+      default: "MAIN",
+      trim: true,
+      uppercase: true,
+    },
+
+    general: {
+      minimumSalary: {
+        type: Number,
+        default: 1750905,
+        min: 0,
+      },
+
+      currentYear: {
+        type: Number,
+        default: 2026,
+        min: 2020,
+        max: 2100,
+      },
+    },
+
+    banks: {
+      type: [settingItemSchema],
+      default: [
+        { name: "BANCOLOMBIA", active: true },
+        { name: "DAVIVIENDA", active: true },
+        { name: "NEQUI", active: true },
+        { name: "OTRO", active: true },
+      ],
+    },
+
+    paymentMethods: {
+      type: [settingItemSchema],
+      default: [
+        { name: "EFECTIVO", active: true },
+        { name: "TRANSFERENCIA", active: true },
+        { name: "CONSIGNACIÓN", active: true },
+        { name: "OTRO", active: true },
+      ],
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 
 const counterSchema = new mongoose.Schema({ _id: String, seq: Number });
 
@@ -383,3 +452,4 @@ export const Expense = mongoose.model("Expense", expenseSchema);
 export const Reminder = mongoose.model("Reminder", reminderSchema);
 export const CollectionAccount = mongoose.model("CollectionAccount", collectionAccountSchema);
 export const CollectionAccountPayroll = mongoose.model("CollectionAccountPayroll", collectionAccountPayrollSchema);
+export const SystemSetting = mongoose.model(  "SystemSetting",  systemSettingSchema);

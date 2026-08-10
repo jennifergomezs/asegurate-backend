@@ -12,11 +12,13 @@ import expenseRoutes from "./expenseRoutes.js";
 import payrollUpdateRoutes from "./payrollUpdateRoutes.js";
 import clientRoutes from "./clientRoutes.js";
 import receiptRoutes from "./receiptRoutes.js";
+import settingsRoutes from "./settingsRoutes.js";
 
 export function registerRoutes(app) {
   app.use(healthRoutes);
   app.use(authRoutes);
   app.use(userRoutes);
+  app.use(settingsRoutes);
   app.use(collectionAccountRoutes);
   app.use(collectionAccountPayrollRoutes);
   app.use(companyRoutes);
