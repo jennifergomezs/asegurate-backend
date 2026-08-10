@@ -74,6 +74,7 @@ const collectionAccountPaymentSchema = new mongoose.Schema({
   date: { type: String, required: true },
   amount: { type: Number, required: true, min: 1 },
   method: { type: String, default: "TRANSFERENCIA" },
+  bank: { type: String, default: "" },
   reference: { type: String, default: "" },
   note: { type: String, default: "" },
   registeredBy: { type: String, default: "" },

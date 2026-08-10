@@ -84,10 +84,29 @@ router.post("/collection-accounts/:id/payments", auth, allow("ADMIN"), async (re
     if (amount <= 0) return res.status(400).json({ error: "El valor del abono debe ser mayor a cero" });
     if (amount > Number(account.balance || 0)) return res.status(400).json({ error: "El abono no puede superar el saldo pendiente" });
     account.payments.push({
-      date: req.body.date || new Date().toISOString().slice(0, 10), amount,
-      method: req.body.method || "TRANSFERENCIA", reference: req.body.reference || "",
-      note: req.body.note || "", registeredBy: req.user.name,
-    });
+  date:
+    req.body.date ||
+    new Date().toISOString().slice(0, 10),
+
+  amount,
+
+  method:
+    req.body.method || "TRANSFERENCIA",
+
+  bank:
+    req.body.method === "EFECTIVO"
+      ? ""
+      : req.body.bank || "",
+
+  reference:
+    req.body.reference || "",
+
+  note:
+    req.body.note || "",
+
+  registeredBy:
+    req.user.name,
+});
     const totals = accountTotals(account.items, account.additionalValue, account.discount, account.payments);
     account.paidTotal = totals.paidTotal; account.balance = totals.balance; account.status = totals.status;
     await account.save();
