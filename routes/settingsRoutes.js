@@ -871,4 +871,120 @@ router.post(
   }
 );
 
+// ======================================================
+// MIGRAR CÓDIGOS PILA EXISTENTES A CONFIGURACIÓN
+// ======================================================
+
+router.post(
+  "/settings/import-pila-codes",
+  auth,
+  allow("ADMIN"),
+  async (req, res) => {
+    try {
+      const settings = await getMainSettings();
+
+      const CODE_MAPS = {
+        eps: {
+          SANITAS: "EPS010",
+          "EPS SANITAS": "EPS010",
+          "NUEVA EPS": "EPS037",
+          SURA: "EPS012",
+          "EPS SURA": "EPS012",
+          "SALUD TOTAL": "EPS002",
+          COMPENSAR: "EPS008",
+          "MUTUAL SER": "ESSC07",
+          CAJACOPI: "CCFC55",
+          COOSALUD: "ESSC24",
+          "CAPITAL SALUD": "EPSC34",
+          FAMISANAR: "EPS017",
+          FOSYGA: "MIN001",
+          ADRES: "MIN001",
+          ALIANSALUD: "EPS001",
+        },
+
+        afp: {
+          PROTECCION: "230201",
+          "PROTECCIÓN": "230201",
+          PORVENIR: "230301",
+          COLFONDOS: "230901",
+          COLPENSIONES: "25-14",
+        },
+
+        arl: {
+          SURA: "14-11",
+          POSITIVA: "14-23",
+          BOLIVAR: "14-7",
+          "BOLÍVAR": "14-7",
+          "SEGUROS BOLIVAR": "14-7",
+          "SEGUROS BOLÍVAR": "14-7",
+        },
+
+        ccf: {
+          CAFAM: "CCF21",
+          COFREM: "CCF34",
+          COLSUBSIDIO: "CCF22",
+          COMPENSAR: "CCF24",
+          CAJASAM: "CCF39",
+          CAJASAN: "CCF39",
+          COMFACASANARE: "CCF69",
+          "SIN CCF": "CCF39",
+          "NO APLICA": "CCF39",
+        },
+      };
+
+      const updated = {
+        eps: 0,
+        afp: 0,
+        arl: 0,
+        ccf: 0,
+      };
+
+      for (const type of [
+        "eps",
+        "afp",
+        "arl",
+        "ccf",
+      ]) {
+        const catalog =
+          settings.catalogs?.[type] || [];
+
+        const map = CODE_MAPS[type];
+
+        for (const item of catalog) {
+          const name = String(item.name || "")
+            .trim()
+            .toUpperCase();
+
+          const code = map[name];
+
+          if (code && item.code !== code) {
+            item.code = code;
+            updated[type]++;
+          }
+        }
+      }
+
+      await settings.save();
+
+      res.json({
+        message:
+          "Códigos PILA importados correctamente",
+        updated,
+        catalogs: settings.catalogs,
+      });
+    } catch (e) {
+      console.error(
+        "ERROR POST /settings/import-pila-codes",
+        e
+      );
+
+      res.status(500).json({
+        error:
+          e.message ||
+          "No se pudieron importar los códigos PILA",
+      });
+    }
+  }
+);
+
 export default router;
