@@ -129,8 +129,7 @@ async function getMainSettings() {
 router.get(
   "/settings",
   auth,
-  allow("ADMIN"),
-  async (req, res) => {
+    async (req, res) => {
     try {
       const settings = await getMainSettings();
 
