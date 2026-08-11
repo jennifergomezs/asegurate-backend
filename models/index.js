@@ -251,6 +251,11 @@ const receiptPaymentSchema = new mongoose.Schema(
       trim: true,
     },
 
+    paymentDate: {
+      type: String,
+      default: "",
+    },
+
     amount: {
       type: Number,
       required: true,

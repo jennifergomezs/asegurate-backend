@@ -43,11 +43,12 @@ router.post("/receipts", auth, allow("ADMIN", "ASESOR"), async (req, res) => {
     const normalizedPaymentDetails = Array.isArray(paymentDetails)
   ? paymentDetails
       .map((payment) => ({
-        method: String(payment?.method || "").trim().toUpperCase(),
-        bank: String(payment?.bank || "").trim().toUpperCase(),
-        reference: String(payment?.reference || "").trim(),
-        amount: Number(payment?.amount || 0),
-      }))
+  method: String(payment?.method || "").trim().toUpperCase(),
+  bank: String(payment?.bank || "").trim().toUpperCase(),
+  reference: String(payment?.reference || "").trim(),
+  paymentDate: String(payment?.paymentDate || "").trim(),
+  amount: Number(payment?.amount || 0),
+}))
       .filter((payment) => payment.method && payment.amount > 0)
   : [];
 
@@ -397,11 +398,12 @@ router.put("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
     const requestedPaymentDetails = Array.isArray(req.body.paymentDetails)
   ? req.body.paymentDetails
       .map((payment) => ({
-        method: String(payment?.method || "").trim().toUpperCase(),
-        bank: String(payment?.bank || "").trim().toUpperCase(),
-        reference: String(payment?.reference || "").trim(),
-        amount: Number(payment?.amount || 0),
-      }))
+  method: String(payment?.method || "").trim().toUpperCase(),
+  bank: String(payment?.bank || "").trim().toUpperCase(),
+  reference: String(payment?.reference || "").trim(),
+  paymentDate: String(payment?.paymentDate || "").trim(),
+  amount: Number(payment?.amount || 0),
+}))
       .filter((payment) => payment.method && payment.amount > 0)
   : null;
 
