@@ -348,6 +348,7 @@ const receiptSchema = new mongoose.Schema({
     afp: { type: Number, default: 0 },
     cofrem: { type: Number, default: 0 },
     parafiscales: { type: Number, default: 0 },
+    mora: { type: Number, default: 0 },
     service: { type: Number, default: 0 },
     planillaValue: { type: Number, default: 0 },
     totalSystem: { type: Number, default: 0 },
