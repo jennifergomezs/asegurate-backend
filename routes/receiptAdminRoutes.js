@@ -28,7 +28,7 @@ router.delete("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
 
 
 // Anular recibo
-router.put("/receipts/:id/cancel", auth, allow("ADMIN"), async (req, res) => {
+router.put(  "/receipts/:id/cancel",  auth,  allow("ADMIN", "ASESOR"),  async (req, res) => {
   try {
     const { id } = req.params;
 

@@ -219,17 +219,27 @@ if (invalidBankPayment) {
       return res.status(404).json({ error: "Cliente no encontrado" });
     }
 
-    const existingReceipt = await Receipt.findOne({
-      clientId,
-      monthLabel,
-      status: { $ne: "ANULADO" },
-    });
+    // Evitar recibos duplicados por período.
+// AGRUPADO e INDEPENDIENTE: solo un recibo activo por período.
+// EMPRESA: puede registrar varios servicios en el mismo período.
+// Los recibos ANULADOS no bloquean la creación de uno nuevo.
+const clientType = String(client.clientType || "")
+  .trim()
+  .toUpperCase();
 
-    if (existingReceipt) {
-      return res.status(400).json({
-        error: `Este cliente ya tiene un recibo registrado para ${monthLabel}`,
-      });
-    }
+if (clientType !== "EMPRESA") {
+  const existingReceipt = await Receipt.findOne({
+    clientId,
+    monthLabel,
+    status: { $ne: "ANULADO" },
+  });
+
+  if (existingReceipt) {
+    return res.status(400).json({
+      error: `Este cliente ya tiene un recibo registrado para ${monthLabel}`,
+    });
+  }
+}
 
     const received =
   normalizedPaymentDetails.length > 0
