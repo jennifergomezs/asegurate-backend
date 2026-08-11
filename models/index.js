@@ -216,6 +216,7 @@ groupNit: {
   afp: { type: String, default: "PROTECCION" },
   arl: { type: String, default: "SEGUROS BOLIVAR" },
   ccf: { type: String, default: "NO APLICA" },
+    excludePensionFromReceipt: {    type: Boolean,    default: false,  },
 
   plan: { type: String, default: "4" },
   risk: { type: String, default: "1" },
