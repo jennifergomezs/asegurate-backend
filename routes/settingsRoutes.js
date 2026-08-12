@@ -32,6 +32,8 @@ const DEFAULT_SETTINGS = {
     currentYear: 2026,
   },
 
+    bankAccounts: [],
+
   catalogs: {
     eps: [],
     afp: [],
@@ -585,6 +587,349 @@ router.put(
         error:
           e.message ||
           "No se pudo actualizar el registro",
+      });
+    }
+  }
+);
+
+// ======================================================
+// CUENTAS BANCARIAS
+// ======================================================
+
+
+// OBTENER CUENTAS BANCARIAS
+router.get(
+  "/settings/bank-accounts",
+  auth,
+  async (req, res) => {
+    try {
+      const settings = await getMainSettings();
+
+      const accounts = [
+        ...(settings.bankAccounts || []),
+      ].sort(
+        (a, b) =>
+          Number(a.order || 0) -
+          Number(b.order || 0)
+      );
+
+      res.json(accounts);
+    } catch (e) {
+      console.error(
+        "ERROR GET /settings/bank-accounts",
+        e
+      );
+
+      res.status(500).json({
+        error:
+          e.message ||
+          "No se pudieron cargar las cuentas bancarias",
+      });
+    }
+  }
+);
+
+
+// AGREGAR CUENTA BANCARIA
+router.post(
+  "/settings/bank-accounts",
+  auth,
+  allow("ADMIN"),
+  async (req, res) => {
+    try {
+      const settings = await getMainSettings();
+
+      const bank = String(
+        req.body.bank || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const accountType = String(
+        req.body.accountType || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const accountNumber = String(
+        req.body.accountNumber || ""
+      ).trim();
+
+      const holderName = String(
+        req.body.holderName || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const holderDocument = String(
+        req.body.holderDocument || ""
+      ).trim();
+
+      if (!bank) {
+        return res.status(400).json({
+          error: "El banco es obligatorio",
+        });
+      }
+
+      if (
+        !["AHORROS", "CORRIENTE"].includes(
+          accountType
+        )
+      ) {
+        return res.status(400).json({
+          error:
+            "Selecciona un tipo de cuenta válido",
+        });
+      }
+
+      if (!accountNumber) {
+        return res.status(400).json({
+          error:
+            "El número de cuenta es obligatorio",
+        });
+      }
+
+      if (!holderName) {
+        return res.status(400).json({
+          error:
+            "El titular es obligatorio",
+        });
+      }
+
+      if (!holderDocument) {
+        return res.status(400).json({
+          error:
+            "El documento o NIT del titular es obligatorio",
+        });
+      }
+
+      const accounts =
+        settings.bankAccounts || [];
+
+      const duplicate = accounts.some(
+        (item) =>
+          String(item.bank || "")
+            .trim()
+            .toUpperCase() === bank &&
+          String(item.accountNumber || "")
+            .trim() === accountNumber
+      );
+
+      if (duplicate) {
+        return res.status(400).json({
+          error:
+            "Esta cuenta bancaria ya está registrada",
+        });
+      }
+
+      let order = Number(req.body.order);
+
+      if (
+        !Number.isInteger(order) ||
+        order < 1
+      ) {
+        const maxOrder = accounts.reduce(
+          (max, item) =>
+            Math.max(
+              max,
+              Number(item.order || 0)
+            ),
+          0
+        );
+
+        order = maxOrder + 1;
+      }
+
+      settings.bankAccounts.push({
+        bank,
+        accountType,
+        accountNumber,
+        holderName,
+        holderDocument,
+        active: true,
+        order,
+      });
+
+      await settings.save();
+
+      const updated = [
+        ...settings.bankAccounts,
+      ].sort(
+        (a, b) =>
+          Number(a.order || 0) -
+          Number(b.order || 0)
+      );
+
+      res.status(201).json(updated);
+    } catch (e) {
+      console.error(
+        "ERROR POST /settings/bank-accounts",
+        e
+      );
+
+      res.status(400).json({
+        error:
+          e.message ||
+          "No se pudo agregar la cuenta bancaria",
+      });
+    }
+  }
+);
+
+
+// EDITAR / ACTIVAR / INACTIVAR CUENTA BANCARIA
+router.put(
+  "/settings/bank-accounts/:id",
+  auth,
+  allow("ADMIN"),
+  async (req, res) => {
+    try {
+      const settings = await getMainSettings();
+
+      const account =
+        settings.bankAccounts.id(
+          req.params.id
+        );
+
+      if (!account) {
+        return res.status(404).json({
+          error:
+            "Cuenta bancaria no encontrada",
+        });
+      }
+
+      if (req.body.bank !== undefined) {
+        account.bank = String(
+          req.body.bank || ""
+        )
+          .trim()
+          .toUpperCase();
+      }
+
+      if (
+        req.body.accountType !== undefined
+      ) {
+        const accountType = String(
+          req.body.accountType || ""
+        )
+          .trim()
+          .toUpperCase();
+
+        if (
+          !["AHORROS", "CORRIENTE"].includes(
+            accountType
+          )
+        ) {
+          return res.status(400).json({
+            error:
+              "Selecciona un tipo de cuenta válido",
+          });
+        }
+
+        account.accountType =
+          accountType;
+      }
+
+      if (
+        req.body.accountNumber !== undefined
+      ) {
+        const accountNumber = String(
+          req.body.accountNumber || ""
+        ).trim();
+
+        if (!accountNumber) {
+          return res.status(400).json({
+            error:
+              "El número de cuenta es obligatorio",
+          });
+        }
+
+        account.accountNumber =
+          accountNumber;
+      }
+
+      if (
+        req.body.holderName !== undefined
+      ) {
+        const holderName = String(
+          req.body.holderName || ""
+        )
+          .trim()
+          .toUpperCase();
+
+        if (!holderName) {
+          return res.status(400).json({
+            error:
+              "El titular es obligatorio",
+          });
+        }
+
+        account.holderName =
+          holderName;
+      }
+
+      if (
+        req.body.holderDocument !== undefined
+      ) {
+        const holderDocument = String(
+          req.body.holderDocument || ""
+        ).trim();
+
+        if (!holderDocument) {
+          return res.status(400).json({
+            error:
+              "El documento o NIT es obligatorio",
+          });
+        }
+
+        account.holderDocument =
+          holderDocument;
+      }
+
+      if (req.body.order !== undefined) {
+        const order = Number(
+          req.body.order
+        );
+
+        if (
+          !Number.isInteger(order) ||
+          order < 1
+        ) {
+          return res.status(400).json({
+            error:
+              "El orden debe ser mayor a 0",
+          });
+        }
+
+        account.order = order;
+      }
+
+      if (req.body.active !== undefined) {
+        account.active =
+          Boolean(req.body.active);
+      }
+
+      await settings.save();
+
+      const updated = [
+        ...settings.bankAccounts,
+      ].sort(
+        (a, b) =>
+          Number(a.order || 0) -
+          Number(b.order || 0)
+      );
+
+      res.json(updated);
+    } catch (e) {
+      console.error(
+        "ERROR PUT /settings/bank-accounts/:id",
+        e
+      );
+
+      res.status(400).json({
+        error:
+          e.message ||
+          "No se pudo actualizar la cuenta bancaria",
       });
     }
   }

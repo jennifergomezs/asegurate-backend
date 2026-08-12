@@ -438,6 +438,11 @@ const systemSettingSchema = new mongoose.Schema(
       },
     },
 
+    bankAccounts: {
+       type: [bankAccountSettingSchema],
+       default: [],
+       },
+
     catalogs: {
       eps: {
         type: [settingItemSchema],
@@ -477,6 +482,58 @@ const systemSettingSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  }
+);
+
+const bankAccountSettingSchema = new mongoose.Schema(
+  {
+    bank: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+    },
+
+    accountType: {
+      type: String,
+      enum: ["AHORROS", "CORRIENTE"],
+      required: true,
+      uppercase: true,
+      trim: true,
+    },
+
+    accountNumber: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    holderName: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+    },
+
+    holderDocument: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    active: {
+      type: Boolean,
+      default: true,
+    },
+
+    order: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+  },
+  {
+    _id: true,
   }
 );
 
