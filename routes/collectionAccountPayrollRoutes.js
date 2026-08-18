@@ -67,11 +67,19 @@ router.get("/collection-accounts/:id/payroll-data", auth, allow("ADMIN"), async 
       return res.status(404).json({ error: "Cuenta de cobro no encontrada" });
     }
 
-    if (String(account.accountType || "").toUpperCase() !== "AGRUPADOS") {
-      return res.status(400).json({
-        error: "Solo las cuentas de tipo AGRUPADOS contienen trabajadores para planilla",
-      });
-    }
+    const accountType = String(
+  account.accountType || ""
+).toUpperCase();
+
+if (
+  accountType !== "AGRUPADOS" &&
+  accountType !== "EMPRESA"
+) {
+  return res.status(400).json({
+    error:
+      "Esta cuenta de cobro no contiene trabajadores para planilla",
+  });
+}
 
     const workerItems = (account.items || []).filter(
       (item) =>
