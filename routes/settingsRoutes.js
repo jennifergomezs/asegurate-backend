@@ -299,6 +299,23 @@ router.post(
         .trim()
         .toUpperCase();
 
+        const aliases = Array.isArray(req.body.aliases)
+  ? req.body.aliases
+      .map((value) =>
+        String(value || "")
+          .trim()
+          .toUpperCase()
+      )
+      .filter(Boolean)
+  : [];
+
+const nit = String(
+  req.body.nit || ""
+).trim();
+
+const historical =
+  req.body.historical === true;
+
       const code = String(
         req.body.code || ""
       )
@@ -374,12 +391,15 @@ router.post(
         order = maxOrder + 1;
       }
 
-      catalog.push({
-        name,
-        code,
-        active: true,
-        order,
-      });
+     catalog.push({
+  name,
+  code,
+  aliases,
+  nit,
+  historical,
+  active: true,
+  order,
+});
 
       await settings.save();
 
@@ -524,7 +544,43 @@ router.put(
         item.code = code;
       }
 
+      // ==================================================
+// EDITAR ALIAS / CÓDIGOS ALTERNOS
+// ==================================================
 
+if (req.body.aliases !== undefined) {
+  item.aliases = Array.isArray(req.body.aliases)
+    ? req.body.aliases
+        .map((value) =>
+          String(value || "")
+            .trim()
+            .toUpperCase()
+        )
+        .filter(Boolean)
+    : [];
+}
+
+
+// ==================================================
+// EDITAR NIT
+// ==================================================
+
+if (req.body.nit !== undefined) {
+  item.nit = String(
+    req.body.nit || ""
+  ).trim();
+}
+
+
+// ==================================================
+// MARCAR COMO HISTÓRICA
+// ==================================================
+
+if (req.body.historical !== undefined) {
+  item.historical =
+    Boolean(req.body.historical);
+}
+   
       // ==================================================
       // EDITAR ORDEN
       // ==================================================
