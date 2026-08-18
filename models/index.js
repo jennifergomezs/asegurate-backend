@@ -21,6 +21,56 @@ const companySchema = new mongoose.Schema({
     enum: ["SI", "NO"],
     default: "SI",
   },
+  // Datos PILA propios de la empresa
+documentType: {
+  type: String,
+  default: "NI",
+},
+
+dv: {
+  type: String,
+  default: "",
+},
+
+operatorCode: {
+  type: String,
+  default: "",
+},
+
+contributorType: {
+  type: String,
+  default: "",
+},
+
+presentationType: {
+  type: String,
+  default: "",
+},
+
+branchCode: {
+  type: String,
+  default: "1",
+},
+
+branchName: {
+  type: String,
+  default: "PRINCIPAL",
+},
+
+arl: {
+  type: String,
+  default: "",
+},
+
+ccf: {
+  type: String,
+  default: "",
+},
+
+risk: {
+  type: String,
+  default: "1",
+},
   active: { type: Boolean, default: true },
 }, { timestamps: true });
 

@@ -1,10 +1,16 @@
 import express from "express";
 import mongoose from "mongoose";
-import { Client } from "../models/index.js";
+import {  Client,  Company,  SystemSetting,} from "../models/index.js";
+import multer from "multer";
+import * as XLSX from "xlsx";
 import { auth, allow } from "../middleware/auth.js";
 const { isValidObjectId } = mongoose;
 
 const router = express.Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
 
 // ---- Clientes
 router.post("/clients", auth, allow("ADMIN","ASESOR"), async (req,res)=>{
