@@ -1,8 +1,14 @@
 import express from "express";
+import multer from "multer";
+import * as XLSX from "xlsx";
 import {  SystemSetting,  Client,  Receipt,  CollectionAccount,  CollectionAccountPayroll,} from "../models/index.js";
 import { auth, allow } from "../middleware/auth.js";
 
 const router = express.Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
 
 
 // ======================================================
@@ -1528,6 +1534,229 @@ router.post(
         error:
           e.message ||
           "No se pudo importar el catálogo de administradoras",
+      });
+    }
+  }
+);
+
+// ======================================================
+// IMPORTACIÓN ÚNICA DE ADMINISTRADORAS DESDE EXCEL
+// ======================================================
+
+router.post(
+  "/settings/import-administrators-excel",
+  auth,
+  allow("ADMIN"),
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          error: "Debes seleccionar un archivo Excel",
+        });
+      }
+
+      const workbook = XLSX.read(req.file.buffer, {
+        type: "buffer",
+      });
+
+      const sheetName = "Importacion";
+
+      if (!workbook.SheetNames.includes(sheetName)) {
+        return res.status(400).json({
+          error:
+            'El archivo debe contener una hoja llamada "Importacion"',
+        });
+      }
+
+      const worksheet =
+        workbook.Sheets[sheetName];
+
+      const rows = XLSX.utils.sheet_to_json(
+        worksheet,
+        {
+          defval: "",
+          raw: false,
+        }
+      );
+
+      if (!rows.length) {
+        return res.status(400).json({
+          error:
+            "El archivo no contiene administradoras para importar",
+        });
+      }
+
+      const settings =
+        await getMainSettings();
+
+      const allowedTypes = [
+        "eps",
+        "afp",
+        "arl",
+        "ccf",
+      ];
+
+      const result = {
+        totalRows: rows.length,
+        created: {
+          eps: 0,
+          afp: 0,
+          arl: 0,
+          ccf: 0,
+        },
+        updated: {
+          eps: 0,
+          afp: 0,
+          arl: 0,
+          ccf: 0,
+        },
+        errors: [],
+      };
+
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
+
+        const type = String(
+          row.tipo || ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const name = String(
+          row.nombre || ""
+        )
+          .trim()
+          .toUpperCase();
+
+        const code = String(
+          row.codigo || ""
+        )
+          .trim()
+          .toUpperCase();
+
+        const aliases = String(
+          row.aliases || ""
+        )
+          .split(",")
+          .map((value) =>
+            value.trim().toUpperCase()
+          )
+          .filter(Boolean);
+
+        const nit = String(
+          row.nit || ""
+        ).trim();
+
+        const historical =
+          String(row.historical || "")
+            .trim()
+            .toLowerCase() === "true";
+
+        const excelRow = index + 2;
+
+        if (!allowedTypes.includes(type)) {
+          result.errors.push({
+            row: excelRow,
+            error:
+              "Tipo inválido. Debe ser EPS, AFP, ARL o CCF",
+          });
+
+          continue;
+        }
+
+        if (!name) {
+          result.errors.push({
+            row: excelRow,
+            error:
+              "La administradora no tiene nombre",
+          });
+
+          continue;
+        }
+
+        const catalog =
+          settings.catalogs[type];
+
+        const existing = catalog.find(
+          (item) =>
+            String(item.name || "")
+              .trim()
+              .toUpperCase() === name ||
+            (
+              code &&
+              String(item.code || "")
+                .trim()
+                .toUpperCase() === code
+            )
+        );
+
+        if (existing) {
+          existing.name = name;
+          existing.code = code;
+
+          existing.aliases = [
+            ...new Set([
+              code,
+              ...aliases,
+            ].filter(Boolean)),
+          ];
+
+          existing.nit = nit;
+
+          existing.historical =
+            historical;
+
+          result.updated[type]++;
+
+          continue;
+        }
+
+        const maxOrder =
+          catalog.reduce(
+            (max, item) =>
+              Math.max(
+                max,
+                Number(item.order || 0)
+              ),
+            0
+          );
+
+        catalog.push({
+          name,
+          code,
+          aliases: [
+            ...new Set([
+              code,
+              ...aliases,
+            ].filter(Boolean)),
+          ],
+          nit,
+          historical,
+          active: true,
+          order: maxOrder + 1,
+        });
+
+        result.created[type]++;
+      }
+
+      await settings.save();
+
+      res.json({
+        message:
+          "Importación de administradoras terminada",
+        result,
+      });
+    } catch (e) {
+      console.error(
+        "ERROR POST /settings/import-administrators-excel",
+        e
+      );
+
+      res.status(500).json({
+        error:
+          e.message ||
+          "No se pudo importar el Excel de administradoras",
       });
     }
   }
