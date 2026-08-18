@@ -1,6 +1,11 @@
 import express from "express";
 import mongoose from "mongoose";
-import { CollectionAccount, CollectionAccountPayroll, Client } from "../models/index.js";
+import {
+  CollectionAccount,
+  CollectionAccountPayroll,
+  Client,
+  Company,
+} from "../models/index.js";
 import { auth, allow } from "../middleware/auth.js";
 import { ARL_RATES, roundToHundred, isNoAplica } from "../utils/helpers.js";
 const { isValidObjectId } = mongoose;
@@ -81,6 +86,14 @@ if (
   });
 }
 
+let company = null;
+
+if (accountType === "EMPRESA") {
+  company = await Company.findOne({
+    nit: String(account.companyNit || "").trim(),
+  });
+}
+
     const workerItems = (account.items || []).filter(
       (item) =>
         String(item?.itemType || "").toUpperCase() === "WORKER" &&
@@ -133,8 +146,12 @@ if (
       );
 
       const days = Number(item?.days || 30);
-      const risk = String(client?.risk || item?.risk || "0");
-      const arlRate = ARL_RATES[risk] || 0;
+     const risk =
+  accountType === "EMPRESA"
+    ? String(company?.risk || client?.risk || item?.risk || "1")
+    : String(client?.risk || item?.risk || "0");
+
+const arlRate = ARL_RATES[risk] || 0;
 
       const eps = isNoAplica(client?.eps || item?.eps)
         ? 0
@@ -144,13 +161,23 @@ if (
         ? 0
         : roundToHundred(base * 0.16);
 
-      const arl = isNoAplica(client?.arl || item?.arl)
-        ? 0
-        : roundToHundred(base * arlRate);
+      const arlName =
+  accountType === "EMPRESA"
+    ? (company?.arl || client?.arl || item?.arl || "")
+    : (client?.arl || item?.arl || "");
 
-      const cofrem = isNoAplica(client?.ccf || item?.ccf)
-        ? 0
-        : roundToHundred(base * 0.04);
+const ccfName =
+  accountType === "EMPRESA"
+    ? (company?.ccf || client?.ccf || item?.ccf || "")
+    : (client?.ccf || item?.ccf || "");
+
+const arl = isNoAplica(arlName)
+  ? 0
+  : roundToHundred(base * arlRate);
+
+const cofrem = isNoAplica(ccfName)
+  ? 0
+  : roundToHundred(base * 0.04);
 
       const employeeKey = String(
         item?.clientId ||
@@ -188,8 +215,8 @@ if (
 
         epsName: client?.eps || item?.eps || "",
         afpName: client?.afp || item?.afp || "",
-        arlName: client?.arl || item?.arl || "",
-        ccfName: client?.ccf || item?.ccf || "",
+        arlName,
+ccfName,
 
         risk,
         days,
