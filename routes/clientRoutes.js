@@ -328,13 +328,12 @@ router.post(
         workbook.Sheets[firstSheetName];
 
       const rows = XLSX.utils.sheet_to_json(
-        worksheet,
-        {
-          defval: "",
-          raw: false,
-          range: 5,
-        }
-      );
+  worksheet,
+  {
+    defval: "",
+    raw: false,
+  }
+);
 
       if (!rows.length) {
         return res.status(400).json({
