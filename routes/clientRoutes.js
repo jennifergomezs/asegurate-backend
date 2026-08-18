@@ -275,5 +275,350 @@ router.delete("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
   }
 });
    
+// ======================================================
+// CARGA MASIVA DE TRABAJADORES POR EMPRESA DESDE EXCEL
+// ======================================================
+
+router.post(
+  "/clients/import-company-excel",
+  auth,
+  allow("ADMIN", "ASESOR"),
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const companyId = String(req.body.companyId || "").trim();
+
+      if (!companyId) {
+        return res.status(400).json({
+          error: "Debes seleccionar una empresa",
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          error: "Debes seleccionar un archivo Excel",
+        });
+      }
+
+      const company = await Company.findById(companyId);
+
+      if (!company) {
+        return res.status(404).json({
+          error: "Empresa no encontrada",
+        });
+      }
+
+      const settings = await SystemSetting.findOne({
+        key: "MAIN",
+      });
+
+      if (!settings) {
+        return res.status(400).json({
+          error: "No existe configuración del sistema",
+        });
+      }
+
+      const workbook = XLSX.read(req.file.buffer, {
+        type: "buffer",
+      });
+
+      const firstSheetName = workbook.SheetNames[0];
+
+      const worksheet =
+        workbook.Sheets[firstSheetName];
+
+      const rows = XLSX.utils.sheet_to_json(
+        worksheet,
+        {
+          defval: "",
+          raw: false,
+          range: 5,
+        }
+      );
+
+      if (!rows.length) {
+        return res.status(400).json({
+          error:
+            "El archivo no contiene trabajadores para importar",
+        });
+      }
+
+      const normalize = (value) =>
+        String(value || "")
+          .trim()
+          .toUpperCase();
+
+      const findAdministrator = (
+        type,
+        value
+      ) => {
+        const search = normalize(value);
+
+        if (!search) return null;
+
+        const catalog =
+          settings.catalogs?.[type] || [];
+
+        return (
+          catalog.find((item) => {
+            const name = normalize(item.name);
+            const code = normalize(item.code);
+
+            const aliases = Array.isArray(
+              item.aliases
+            )
+              ? item.aliases.map(normalize)
+              : [];
+
+            return (
+              name === search ||
+              code === search ||
+              aliases.includes(search)
+            );
+          }) || null
+        );
+      };
+
+      const result = {
+        total: rows.length,
+        created: 0,
+        skipped: [],
+      };
+
+      for (
+        let index = 0;
+        index < rows.length;
+        index++
+      ) {
+        const row = rows[index];
+        const excelRow = index + 7;
+
+        const docType =
+          normalize(
+            row["Tipo identificación"]
+          ) || "CC";
+
+        const docNumber = String(
+          row["Número"] || ""
+        ).trim();
+
+        const fullName = normalize(
+          row["Nombre"]
+        );
+
+        const salaryBase = String(
+          row["Salario mensual"] || ""
+        )
+          .replace(/[^\d]/g, "")
+          .trim();
+
+        const subtype = String(
+          row["Subtipo"] || ""
+        ).trim();
+
+        const epsValue = row["Salud"];
+        const afpValue = row["Pensión"];
+
+        const joinDate = String(
+          row["Fecha inicio"] || ""
+        ).trim();
+
+        const leaveDate = String(
+          row["Fecha fin"] || ""
+        ).trim();
+
+        if (!docNumber) {
+          result.skipped.push({
+            row: excelRow,
+            docNumber: "",
+            reason:
+              "No tiene número de documento",
+          });
+
+          continue;
+        }
+
+        if (subtype) {
+          result.skipped.push({
+            row: excelRow,
+            docNumber,
+            reason:
+              `Tiene subtipo de cotizante ${subtype}. Revisar manualmente.`,
+          });
+
+          continue;
+        }
+
+        const existing =
+          await Client.findOne({
+            docNumber,
+          });
+
+        if (existing) {
+          result.skipped.push({
+            row: excelRow,
+            docNumber,
+            reason:
+              "Ya existe un cliente con este documento",
+          });
+
+          continue;
+        }
+
+        const eps =
+          findAdministrator(
+            "eps",
+            epsValue
+          );
+
+        if (!eps) {
+          result.skipped.push({
+            row: excelRow,
+            docNumber,
+            reason:
+              `EPS no reconocida: ${epsValue || "VACÍA"}`,
+          });
+
+          continue;
+        }
+
+        let afpName = "SIN AFP";
+
+        if (
+          String(afpValue || "").trim()
+        ) {
+          const afp =
+            findAdministrator(
+              "afp",
+              afpValue
+            );
+
+          if (!afp) {
+            result.skipped.push({
+              row: excelRow,
+              docNumber,
+              reason:
+                `AFP no reconocida: ${afpValue}`,
+            });
+
+            continue;
+          }
+
+          afpName = afp.name;
+        }
+
+        const nameParts =
+          fullName
+            .split(/\s+/)
+            .filter(Boolean);
+
+        if (nameParts.length < 2) {
+          result.skipped.push({
+            row: excelRow,
+            docNumber,
+            reason:
+              "No se pudo separar nombre y apellido",
+          });
+
+          continue;
+        }
+
+        let firstName = "";
+        let secondName = "";
+        let lastName = "";
+        let secondLastName = "";
+
+        if (nameParts.length === 2) {
+          firstName = nameParts[0];
+          lastName = nameParts[1];
+        } else if (nameParts.length === 3) {
+          firstName = nameParts[0];
+          secondName = nameParts[1];
+          lastName = nameParts[2];
+        } else {
+          firstName = nameParts[0];
+          secondName = nameParts[1];
+          lastName =
+            nameParts[nameParts.length - 2];
+          secondLastName =
+            nameParts[nameParts.length - 1];
+        }
+
+        await Client.create({
+          docType,
+          docNumber,
+
+          firstName,
+          secondName,
+          lastName,
+          secondLastName,
+
+          phone: "0",
+
+          clientType: "EMPRESA",
+          companyName: company.name,
+          companyNit: company.nit,
+
+          groupName: "NO APLICA",
+
+          eps: eps.name,
+          afp: afpName,
+
+          arl:
+            company.arl ||
+            "NO APLICA",
+
+          ccf:
+            company.ccf ||
+            "NO APLICA",
+
+          risk:
+            company.risk || "1",
+
+          salaryBase:
+            salaryBase || "1750905",
+
+          serviceValue:
+            String(
+              company.defaultServiceValue ||
+                0
+            ),
+
+          plan: "4",
+          over55: "NO",
+
+          joinDate,
+          leaveDate,
+
+          status:
+            leaveDate
+              ? "RETIRADO"
+              : "ACTIVO",
+
+          ref: "CARGA MASIVA EXCEL",
+        });
+
+        result.created++;
+      }
+
+      res.json({
+        message:
+          "Carga masiva terminada",
+        result,
+      });
+    } catch (e) {
+      console.error(
+        "ERROR POST /clients/import-company-excel",
+        e
+      );
+
+      res.status(500).json({
+        error:
+          e.message ||
+          "No se pudo importar el archivo de trabajadores",
+      });
+    }
+  }
+);
 
 export default router;
