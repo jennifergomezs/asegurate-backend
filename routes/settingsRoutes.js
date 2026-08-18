@@ -1216,7 +1216,7 @@ router.post(
 );
 
 // ======================================================
-// MIGRAR CÓDIGOS PILA EXISTENTES A CONFIGURACIÓN
+// IMPORTAR CATÁLOGO COMPLETO DE ADMINISTRADORAS PILA
 // ======================================================
 
 router.post(
@@ -1227,84 +1227,230 @@ router.post(
     try {
       const settings = await getMainSettings();
 
-      const CODE_MAPS = {
-        eps: {
-          SANITAS: "EPS010",
-          "EPS SANITAS": "EPS010",
-          "NUEVA EPS": "EPS037",
-          SURA: "EPS012",
-          "EPS SURA": "EPS012",
-          "SALUD TOTAL": "EPS002",
-          COMPENSAR: "EPS008",
-          "MUTUAL SER": "ESSC07",
-          CAJACOPI: "CCFC55",
-          COOSALUD: "ESSC24",
-          "CAPITAL SALUD": "EPSC34",
-          FAMISANAR: "EPS017",
-          FOSYGA: "MIN001",
-          ADRES: "MIN001",
-          ALIANSALUD: "EPS001",
-        },
+      const ADMINISTRATORS = {
+        eps: [
+          {
+            name: "ALIANSALUD",
+            code: "EPS001",
+            aliases: ["EPS001"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "SALUD TOTAL",
+            code: "EPS002",
+            aliases: ["EPS002"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "SANITAS",
+            code: "EPS005",
+            aliases: ["EPS005"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COMPENSAR",
+            code: "EPS008",
+            aliases: ["EPS008"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "SURA",
+            code: "EPS010",
+            aliases: ["EPS010"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "FAMISANAR",
+            code: "EPS017",
+            aliases: ["EPS017"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "NUEVA EPS",
+            code: "EPS037",
+            aliases: ["EPS037"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "MUTUAL SER",
+            code: "ESSC07",
+            aliases: ["ESSC07", "ESS007"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "CAJACOPI",
+            code: "CCFC55",
+            aliases: ["CCFC55", "CCF055"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COOSALUD",
+            code: "ESS024",
+            aliases: ["ESS024", "EPS042", "ESSC24", "EPSS42"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "CAPITAL SALUD",
+            code: "EPSC34",
+            aliases: ["EPSC34"],
+            nit: "",
+            historical: false,
+          },
+        ],
 
-        afp: {
-          PROTECCION: "230201",
-          "PROTECCIÓN": "230201",
-          PORVENIR: "230301",
-          COLFONDOS: "230901",
-          COLPENSIONES: "25-14",
-        },
+        afp: [
+          {
+            name: "PROTECCION",
+            code: "230201",
+            aliases: ["230201"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "PORVENIR",
+            code: "230301",
+            aliases: ["230301"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COLFONDOS",
+            code: "230901",
+            aliases: ["230901"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COLPENSIONES",
+            code: "25-14",
+            aliases: ["25-14"],
+            nit: "",
+            historical: false,
+          },
+        ],
 
-        arl: {
-          SURA: "14-11",
-          POSITIVA: "14-23",
-          BOLIVAR: "14-7",
-          "BOLÍVAR": "14-7",
-          "SEGUROS BOLIVAR": "14-7",
-          "SEGUROS BOLÍVAR": "14-7",
-        },
+        arl: [
+          {
+            name: "SURA",
+            code: "14-11",
+            aliases: ["14-11"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "POSITIVA",
+            code: "14-23",
+            aliases: ["14-23"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "SEGUROS BOLIVAR",
+            code: "14-7",
+            aliases: ["14-7"],
+            nit: "",
+            historical: false,
+          },
+        ],
 
-        ccf: {
-          CAFAM: "CCF21",
-          COFREM: "CCF34",
-          COLSUBSIDIO: "CCF22",
-          COMPENSAR: "CCF24",
-          CAJASAM: "CCF39",
-          CAJASAN: "CCF39",
-          COMFACASANARE: "CCF69",
-          "SIN CCF": "CCF39",
-          "NO APLICA": "CCF39",
-        },
+        ccf: [
+          {
+            name: "CAFAM",
+            code: "CCF21",
+            aliases: ["CCF21"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COLSUBSIDIO",
+            code: "CCF22",
+            aliases: ["CCF22"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COMPENSAR",
+            code: "CCF24",
+            aliases: ["CCF24"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COFREM",
+            code: "CCF34",
+            aliases: ["CCF34"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "CAJASAN",
+            code: "CCF39",
+            aliases: ["CCF39"],
+            nit: "",
+            historical: false,
+          },
+          {
+            name: "COMFACASANARE",
+            code: "CCF69",
+            aliases: ["CCF69"],
+            nit: "",
+            historical: false,
+          },
+        ],
       };
 
-      const updated = {
+      const result = {
         eps: 0,
         afp: 0,
         arl: 0,
         ccf: 0,
+        updated: 0,
       };
 
-      for (const type of [
-        "eps",
-        "afp",
-        "arl",
-        "ccf",
-      ]) {
-        const catalog =
-          settings.catalogs?.[type] || [];
+      for (const type of ["eps", "afp", "arl", "ccf"]) {
+        const catalog = settings.catalogs[type];
 
-        const map = CODE_MAPS[type];
+        for (const administrator of ADMINISTRATORS[type]) {
+          const existing = catalog.find(
+            (item) =>
+              String(item.name || "")
+                .trim()
+                .toUpperCase() === administrator.name
+          );
 
-        for (const item of catalog) {
-          const name = String(item.name || "")
-            .trim()
-            .toUpperCase();
+          if (existing) {
+            existing.code = administrator.code;
+            existing.aliases = administrator.aliases;
+            existing.nit = administrator.nit;
+            existing.historical = administrator.historical;
 
-          const code = map[name];
-
-          if (code && item.code !== code) {
-            item.code = code;
-            updated[type]++;
+            result.updated++;
+            continue;
           }
+
+          const maxOrder = catalog.reduce(
+            (max, item) =>
+              Math.max(max, Number(item.order || 0)),
+            0
+          );
+
+          catalog.push({
+            ...administrator,
+            active: true,
+            order: maxOrder + 1,
+          });
+
+          result[type]++;
         }
       }
 
@@ -1312,8 +1458,8 @@ router.post(
 
       res.json({
         message:
-          "Códigos PILA importados correctamente",
-        updated,
+          "Catálogo de administradoras PILA importado correctamente",
+        imported: result,
         catalogs: settings.catalogs,
       });
     } catch (e) {
@@ -1325,10 +1471,8 @@ router.post(
       res.status(500).json({
         error:
           e.message ||
-          "No se pudieron importar los códigos PILA",
+          "No se pudo importar el catálogo de administradoras",
       });
     }
   }
 );
-
-export default router;

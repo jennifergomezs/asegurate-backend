@@ -389,11 +389,43 @@ const settingItemSchema = new mongoose.Schema(
       uppercase: true,
     },
 
+    // Código PILA principal
     code: {
       type: String,
       default: "",
       trim: true,
       uppercase: true,
+    },
+
+    // Otros códigos con los que esta administradora
+    // puede aparecer en archivos de operadores
+    aliases: {
+      type: [String],
+      default: [],
+      set: (values) =>
+        Array.isArray(values)
+          ? values
+              .map((value) =>
+                String(value || "")
+                  .trim()
+                  .toUpperCase()
+              )
+              .filter(Boolean)
+          : [],
+    },
+
+    // NIT de la administradora
+    nit: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // Permite conservar administradoras antiguas
+    // para reconocer archivos históricos
+    historical: {
+      type: Boolean,
+      default: false,
     },
 
     active: {
