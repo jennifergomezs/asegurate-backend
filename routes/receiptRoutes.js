@@ -448,6 +448,79 @@ const paymentReference =
 
 const note = req.body.note ?? receipt.note;
 
+const isOccasional =
+  String(receipt.receiptType || "").toUpperCase() === "OCASIONAL";
+
+let occasionalCustomerUpdate = {};
+
+if (isOccasional && req.body.occasionalCustomer) {
+  const customer = req.body.occasionalCustomer;
+
+  occasionalCustomerUpdate = {
+    occasionalCustomer: {
+      name: String(
+        customer.name ??
+        receipt.occasionalCustomer?.name ??
+        ""
+      ).trim(),
+
+      docType: String(
+        customer.docType ??
+        receipt.occasionalCustomer?.docType ??
+        "CC"
+      ).trim(),
+
+      docNumber: String(
+        customer.docNumber ??
+        receipt.occasionalCustomer?.docNumber ??
+        ""
+      ).trim(),
+
+      phone: String(
+        customer.phone ??
+        receipt.occasionalCustomer?.phone ??
+        ""
+      ).trim(),
+
+      email: String(
+        customer.email ??
+        receipt.occasionalCustomer?.email ??
+        ""
+      ).trim(),
+    },
+
+    "clientSnapshot.fullName": String(
+      customer.name ??
+      receipt.clientSnapshot?.fullName ??
+      ""
+    ).trim(),
+
+    "clientSnapshot.docType": String(
+      customer.docType ??
+      receipt.clientSnapshot?.docType ??
+      "CC"
+    ).trim(),
+
+    "clientSnapshot.docNumber": String(
+      customer.docNumber ??
+      receipt.clientSnapshot?.docNumber ??
+      ""
+    ).trim(),
+
+    "clientSnapshot.phone": String(
+      customer.phone ??
+      receipt.clientSnapshot?.phone ??
+      ""
+    ).trim(),
+
+    "clientSnapshot.email": String(
+      customer.email ??
+      receipt.clientSnapshot?.email ??
+      ""
+    ).trim(),
+  };
+}
+
     const received =
   requestedPaymentDetails !== null
     ? paymentsTotal
@@ -471,7 +544,7 @@ const note = req.body.note ?? receipt.note;
       0
     );
 
-    const isOccasional = String(receipt.receiptType || "").toUpperCase() === "OCASIONAL";
+    
 
     const totalSystem = isOccasional
   ? planillaValue + service
@@ -488,6 +561,8 @@ const note = req.body.note ?? receipt.note;
     const updated = await Receipt.findByIdAndUpdate(
       id,
      {
+      ...occasionalCustomerUpdate,
+      
   paymentMethod,
   paymentBank,
   paymentReference,
