@@ -253,6 +253,146 @@ router.put("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
   }
 });
 
+// ======================================================
+// NOVEDADES DEL CLIENTE
+// RETIRO / REINGRESO / CAMBIO DE AGRUPADORA
+// ======================================================
+
+router.post(
+  "/clients/:id/novelties",
+  auth,
+  allow("ADMIN", "ASESOR"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!isValidObjectId(id)) {
+        return res.status(400).json({
+          error: "ID de cliente inválido",
+        });
+      }
+
+      const client = await Client.findById(id);
+
+      if (!client) {
+        return res.status(404).json({
+          error: "Cliente no encontrado",
+        });
+      }
+
+      const {
+        type,
+        date,
+        month,
+        year,
+        monthLabel,
+        groupName,
+        previousGroupName,
+        daysWorked,
+        note,
+      } = req.body;
+
+      const noveltyType = String(type || "")
+        .trim()
+        .toUpperCase();
+
+      const allowedTypes = [
+        "RETIRO",
+        "REINGRESO",
+        "CAMBIO_AGRUPADORA",
+      ];
+
+      if (!allowedTypes.includes(noveltyType)) {
+        return res.status(400).json({
+          error: "Tipo de novedad inválido",
+        });
+      }
+
+      const novelty = {
+        type: noveltyType,
+        date: date || new Date().toISOString(),
+        month: String(month || ""),
+        year: String(year || ""),
+        monthLabel: String(monthLabel || ""),
+        groupName: String(
+          groupName || client.groupName || ""
+        ).trim(),
+        previousGroupName: String(
+          previousGroupName || ""
+        ).trim(),
+        daysWorked: Number(daysWorked || 0),
+        note: String(note || "").trim(),
+        registeredBy: req.user?.name || "",
+        registeredRole: req.user?.role || "",
+        registeredAt: new Date(),
+      };
+
+      client.history.push(novelty);
+
+      await client.save();
+
+      res.json({
+        message: "Novedad registrada correctamente",
+        novelty,
+        history: client.history,
+      });
+    } catch (error) {
+      console.error(
+        "ERROR POST /clients/:id/novelties",
+        error
+      );
+
+      res.status(500).json({
+        error:
+          error.message ||
+          "No se pudo registrar la novedad",
+      });
+    }
+  }
+);
+
+router.get(
+  "/clients/:id/novelties",
+  auth,
+  allow("ADMIN", "ASESOR"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!isValidObjectId(id)) {
+        return res.status(400).json({
+          error: "ID de cliente inválido",
+        });
+      }
+
+      const client = await Client.findById(id).select(
+        "history"
+      );
+
+      if (!client) {
+        return res.status(404).json({
+          error: "Cliente no encontrado",
+        });
+      }
+
+      const history = Array.isArray(client.history)
+        ? [...client.history].reverse()
+        : [];
+
+      res.json(history);
+    } catch (error) {
+      console.error(
+        "ERROR GET /clients/:id/novelties",
+        error
+      );
+
+      res.status(500).json({
+        error: "No se pudieron cargar las novedades",
+      });
+    }
+  }
+);
+
 // Eliminar cliente
 router.delete("/clients/:id", auth, allow("ADMIN"), async (req, res) => {
   try {

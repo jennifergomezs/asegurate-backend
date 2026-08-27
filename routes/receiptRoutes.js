@@ -219,28 +219,142 @@ if (invalidBankPayment) {
       return res.status(404).json({ error: "Cliente no encontrado" });
     }
 
-    // Evitar recibos duplicados por período.
-// AGRUPADO e INDEPENDIENTE: solo un recibo activo por período.
-// EMPRESA: puede registrar varios servicios en el mismo período.
-// Los recibos ANULADOS no bloquean la creación de uno nuevo.
+ // ======================================================
+// VALIDACIÓN DE RECIBOS DUPLICADOS / REINGRESOS
+// ======================================================
+//
+// REGLAS:
+// 1. EMPRESA:
+//    Puede registrar varios servicios en el mismo período.
+//
+// 2. AGRUPADO:
+//    - Mismo período + agrupadora diferente = PERMITIR.
+//    - Mismo período + misma agrupadora = BLOQUEAR.
+//    - EXCEPCIÓN: si existe RETIRO en ese período,
+//      se permite un nuevo recibo como REINGRESO.
+//
+// 3. INDEPENDIENTE:
+//    Un solo recibo activo por período.
+//
+// 4. Recibos ANULADOS:
+//    No bloquean un nuevo recibo.
+
 const clientType = String(client.clientType || "")
   .trim()
   .toUpperCase();
 
 if (clientType !== "EMPRESA") {
-  const existingReceipt = await Receipt.findOne({
+  const existingReceipts = await Receipt.find({
     clientId,
     monthLabel,
     status: { $ne: "ANULADO" },
-  });
+  }).sort({ createdAt: 1 });
 
-  if (existingReceipt) {
-    return res.status(400).json({
-      error: `Este cliente ya tiene un recibo registrado para ${monthLabel}`,
-    });
+  if (existingReceipts.length > 0) {
+
+    // ==========================================
+    // CLIENTE AGRUPADO
+    // ==========================================
+    if (clientType === "AGRUPADO") {
+
+      const currentGroupName = String(
+        clientSnapshot?.groupName ||
+        client.groupName ||
+        ""
+      )
+        .trim()
+        .toUpperCase();
+
+      // Buscar recibos anteriores de la MISMA agrupadora
+      const sameGroupReceipts = existingReceipts.filter((existing) => {
+        const previousGroupName = String(
+          existing.clientSnapshot?.groupName ||
+          existing.groupName ||
+          ""
+        )
+          .trim()
+          .toUpperCase();
+
+        return previousGroupName === currentGroupName;
+      });
+
+      // Si NO existe recibo con esta agrupadora,
+      // significa que cambió de agrupadora.
+      // Se permite el nuevo recibo.
+      if (sameGroupReceipts.length === 0) {
+        // EXPRESS -> AUTO, por ejemplo.
+        // PERMITIDO.
+      } else {
+
+        // ==========================================
+        // MISMA AGRUPADORA:
+        // revisar si existe RETIRO en este período
+        // ==========================================
+
+        const history = Array.isArray(client.history)
+          ? client.history
+          : [];
+
+        const retirementNovelties = history.filter((item) => {
+          const noveltyType = String(item?.type || "")
+            .trim()
+            .toUpperCase();
+
+          const noveltyPeriod = String(item?.monthLabel || "")
+            .trim()
+            .toUpperCase();
+
+          const noveltyGroup = String(item?.groupName || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            noveltyType === "RETIRO" &&
+            noveltyPeriod === String(monthLabel || "")
+              .trim()
+              .toUpperCase() &&
+            noveltyGroup === currentGroupName
+          );
+        });
+
+        // Cantidad de movimientos válidos que puede haber
+        // con la misma agrupadora:
+        //
+        // 0 retiros = máximo 1 recibo
+        // 1 retiro  = máximo 2 recibos
+        // 2 retiros = máximo 3 recibos
+        // etc.
+        const allowedReceipts =
+          1 + retirementNovelties.length;
+
+        if (sameGroupReceipts.length >= allowedReceipts) {
+          return res.status(400).json({
+            error:
+              `Este cliente ya tiene un recibo registrado para ${monthLabel}` +
+              (currentGroupName
+                ? ` con la agrupadora ${currentGroupName}`
+                : ""),
+          });
+        }
+
+        // Si llegó aquí:
+        // existe un RETIRO que justifica otro recibo.
+        // Se permite como REINGRESO.
+      }
+
+    } else {
+
+      // ==========================================
+      // INDEPENDIENTE
+      // ==========================================
+
+      return res.status(400).json({
+        error:
+          `Este cliente ya tiene un recibo registrado para ${monthLabel}`,
+      });
+    }
   }
 }
-
     const received =
   normalizedPaymentDetails.length > 0
     ? paymentsTotal
