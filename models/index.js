@@ -148,6 +148,32 @@ const collectionAccountSchema = new mongoose.Schema({
   additionalValue: { type: Number, default: 0 },
   discount: { type: Number, default: 0 },
   total: { type: Number, default: 0 },
+  paymentAccount: {
+  bankAccountId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+  },
+  bank: {
+    type: String,
+    default: "",
+  },
+  accountType: {
+    type: String,
+    default: "",
+  },
+  accountNumber: {
+    type: String,
+    default: "",
+  },
+  holderName: {
+    type: String,
+    default: "",
+  },
+  holderDocument: {
+    type: String,
+    default: "",
+  },
+},
   payments: { type: [collectionAccountPaymentSchema], default: [] },
   paidTotal: { type: Number, default: 0 },
   balance: { type: Number, default: 0 },

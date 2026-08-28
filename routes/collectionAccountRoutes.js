@@ -30,7 +30,23 @@ router.get("/collection-accounts/:id", auth, allow("ADMIN"), async (req, res) =>
 
 router.post("/collection-accounts", auth, allow("ADMIN"), async (req, res) => {
   try {
-    const { accountType, companyName, companyNit, companyClientId, groupName, periodMonth, periodYear, periodLabel, issueDate, dueDate, items = [], additionalValue = 0, discount = 0, notes = "" } = req.body;
+   const {
+  accountType,
+  companyName,
+  companyNit,
+  companyClientId,
+  groupName,
+  periodMonth,
+  periodYear,
+  periodLabel,
+  issueDate,
+  dueDate,
+  items = [],
+  additionalValue = 0,
+  discount = 0,
+  notes = "",
+  paymentAccount = {},
+} = req.body;
 
     if (!["AGRUPADOS", "EMPRESA"].includes(accountType)) return res.status(400).json({ error: "Tipo de cuenta inválido" });
     if (!companyName || !periodMonth || !periodYear || !issueDate) return res.status(400).json({ error: "Empresa, periodo y fecha de emisión son obligatorios" });
@@ -48,8 +64,28 @@ router.post("/collection-accounts", auth, allow("ADMIN"), async (req, res) => {
       periodMonth, periodYear, periodLabel: periodLabel || `${periodMonth}-${periodYear}`,
       issueDate, dueDate: dueDate || "", items: totals.normalizedItems,
       subtotal: totals.subtotal, additionalValue: Number(additionalValue || 0),
-      discount: Number(discount || 0), total: totals.total, paidTotal: 0,
-      balance: totals.total, status: "PENDIENTE", notes, createdByName: req.user.name,
+      discount: Number(discount || 0),
+total: totals.total,
+
+paymentAccount: {
+  bankAccountId:
+    paymentAccount.bankAccountId &&
+    isValidObjectId(paymentAccount.bankAccountId)
+      ? paymentAccount.bankAccountId
+      : null,
+
+  bank: String(paymentAccount.bank || "").trim(),
+  accountType: String(paymentAccount.accountType || "").trim(),
+  accountNumber: String(paymentAccount.accountNumber || "").trim(),
+  holderName: String(paymentAccount.holderName || "").trim(),
+  holderDocument: String(paymentAccount.holderDocument || "").trim(),
+},
+
+paidTotal: 0,
+balance: totals.total,
+status: "PENDIENTE",
+notes,
+createdByName: req.user.name,
     });
     res.json(account);
   } catch (e) {
