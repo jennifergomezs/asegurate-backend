@@ -672,10 +672,25 @@ if (isOccasional && req.body.occasionalCustomer) {
 
     const balance = totalSystem - received;
 
+    const updatedMonth =
+  req.body.month ??
+  receipt.month;
+
+const updatedYear =
+  req.body.year ??
+  receipt.year;
+
+const updatedMonthLabel =
+  req.body.monthLabel ??
+  receipt.monthLabel;
+
     const updated = await Receipt.findByIdAndUpdate(
       id,
      {
       ...occasionalCustomerUpdate,
+      month: updatedMonth,
+year: updatedYear,
+monthLabel: updatedMonthLabel,
       
   paymentMethod,
   paymentBank,
