@@ -288,11 +288,20 @@ groupNit: {
   default: "" 
 },
 
-  eps: { type: String, default: "SANITAS" },
-  afp: { type: String, default: "PROTECCION" },
-  arl: { type: String, default: "SEGUROS BOLIVAR" },
-  ccf: { type: String, default: "NO APLICA" },
-    excludePensionFromReceipt: {    type: Boolean,    default: false,  },
+ eps: { type: String, default: "SANITAS" },
+afp: { type: String, default: "PROTECCION" },
+arl: { type: String, default: "SEGUROS BOLIVAR" },
+ccf: { type: String, default: "NO APLICA" },
+
+excludePensionFromReceipt: {
+  type: Boolean,
+  default: false,
+},
+
+excludeArlFromReceipt: {
+  type: Boolean,
+  default: false,
+},
 
   plan: { type: String, default: "4" },
   risk: { type: String, default: "1" },
@@ -406,10 +415,21 @@ const receiptSchema = new mongoose.Schema({
     default: "NO",
   },
     eps: String,
-    afp: String,
-    excludePensionFromReceipt: {      type: Boolean,      default: false,    },
-    arl: String,
-    ccf: String,
+afp: String,
+
+excludePensionFromReceipt: {
+  type: Boolean,
+  default: false,
+},
+
+arl: String,
+
+excludeArlFromReceipt: {
+  type: Boolean,
+  default: false,
+},
+
+ccf: String,
     plan: String,
     risk: String,
     over55: String,
