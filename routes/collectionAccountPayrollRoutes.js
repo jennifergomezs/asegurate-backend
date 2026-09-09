@@ -390,6 +390,242 @@ router.post("/collection-account-payrolls", auth, allow("ADMIN"), async (req, re
   }
 });
 
+// ======================================================
+// EDITAR PLANILLA DE CUENTA DE COBRO
+// ======================================================
+
+router.put(
+  "/collection-account-payrolls/:id",
+  auth,
+  allow("ADMIN"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!isValidObjectId(id)) {
+        return res.status(400).json({
+          error: "ID de planilla inválido",
+        });
+      }
+
+      const payroll = await CollectionAccountPayroll.findById(id);
+
+      if (!payroll) {
+        return res.status(404).json({
+          error: "Planilla no encontrada",
+        });
+      }
+
+      if (payroll.status === "ANULADA") {
+        return res.status(400).json({
+          error: "No puedes editar una planilla anulada",
+        });
+      }
+
+      const {
+        planillaNumber,
+        paymentDate,
+        operator = "",
+        bank = "",
+        lateFee = 0,
+        employees = [],
+        notes = "",
+      } = req.body;
+
+      // ------------------------------------------
+      // VALIDACIONES BÁSICAS
+      // ------------------------------------------
+
+      if (!String(planillaNumber || "").trim()) {
+        return res.status(400).json({
+          error: "Debes ingresar el número de planilla",
+        });
+      }
+
+      if (!paymentDate) {
+        return res.status(400).json({
+          error: "Debes ingresar la fecha de pago",
+        });
+      }
+
+      if (!Array.isArray(employees) || employees.length === 0) {
+        return res.status(400).json({
+          error: "La planilla debe tener al menos un trabajador",
+        });
+      }
+
+      // ------------------------------------------
+      // IDENTIFICAR LOS TRABAJADORES SELECCIONADOS
+      // ------------------------------------------
+
+      const selectedKeys = employees.map((employee, index) =>
+        String(
+          employee?.employeeKey ||
+            employee?.clientId ||
+            employee?._id ||
+            employee?.docNumber ||
+            employee?.documentNumber ||
+            employee?.document ||
+            `worker-${index}`
+        )
+      );
+
+      // Evitar trabajadores repetidos dentro de
+      // la misma planilla que estamos editando
+      const uniqueKeys = new Set(selectedKeys);
+
+      if (uniqueKeys.size !== selectedKeys.length) {
+        return res.status(400).json({
+          error:
+            "Hay un trabajador repetido dentro de la planilla",
+        });
+      }
+
+      // ------------------------------------------
+      // REVISAR OTRAS PLANILLAS REGISTRADAS
+      // DE LA MISMA CUENTA
+      // ------------------------------------------
+
+      const otherPayrolls =
+        await CollectionAccountPayroll.find({
+          collectionAccountId: payroll.collectionAccountId,
+          status: "REGISTRADA",
+          _id: { $ne: payroll._id },
+        }).select("employees");
+
+      const alreadyProcessed = new Set();
+
+      otherPayrolls.forEach((otherPayroll) => {
+        (otherPayroll.employees || []).forEach(
+          (employee, index) => {
+            const key = String(
+              employee?.employeeKey ||
+                employee?.clientId ||
+                employee?._id ||
+                employee?.docNumber ||
+                employee?.documentNumber ||
+                employee?.document ||
+                `worker-${index}`
+            );
+
+            alreadyProcessed.add(key);
+          }
+        );
+      });
+
+      const duplicatedKey = selectedKeys.find((key) =>
+        alreadyProcessed.has(key)
+      );
+
+      if (duplicatedKey) {
+        return res.status(400).json({
+          error:
+            "Uno de los trabajadores seleccionados ya pertenece a otra planilla registrada",
+        });
+      }
+
+      // ------------------------------------------
+      // RECALCULAR VALOR DE LA PLANILLA
+      // ------------------------------------------
+
+     const calculatedPlanillaValue = employees.reduce(
+  (sum, employee) => {
+    const eps = Number(employee?.eps || 0);
+    const afp = Number(employee?.afp || 0);
+    const arl = Number(employee?.arl || 0);
+
+    const ccfName = String(
+      employee?.ccfName || employee?.ccf || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    let ccf = 0;
+
+    if (
+      ccfName === "SIN CCF" ||
+      ccfName === "NO APLICA"
+    ) {
+      ccf = 100;
+    } else {
+      const rawCcf =
+        employee?.cofrem ??
+        employee?.ccf ??
+        0;
+
+      const numericCcf = Number(rawCcf);
+
+      ccf = Number.isNaN(numericCcf)
+        ? 0
+        : numericCcf;
+    }
+
+    return sum + eps + arl + afp + ccf;
+  },
+  0
+);
+
+      const safeLateFee = Math.max(
+        0,
+        Number(lateFee || 0)
+      );
+
+      const calculatedTotalPaid =
+        calculatedPlanillaValue + safeLateFee;
+
+      // ------------------------------------------
+      // GUARDAR CAMBIOS
+      // ------------------------------------------
+
+      payroll.planillaNumber =
+        String(planillaNumber).trim();
+
+      payroll.paymentDate = String(paymentDate);
+
+      payroll.operator = String(operator || "");
+
+      payroll.bank = String(bank || "");
+
+      payroll.planillaValue =
+        calculatedPlanillaValue;
+
+      payroll.lateFee = safeLateFee;
+
+      payroll.totalPaid = calculatedTotalPaid;
+
+      payroll.employees = employees.map(
+        (employee, index) => ({
+          ...employee,
+          employeeKey: selectedKeys[index],
+        })
+      );
+
+      payroll.notes = String(notes || "");
+
+      payroll.updatedBy = req.user.name;
+      payroll.updatedAt = new Date();
+
+      await payroll.save();
+
+      res.json({
+        message: "Planilla actualizada correctamente",
+        payroll,
+      });
+    } catch (error) {
+      console.error(
+        "ERROR PUT /collection-account-payrolls/:id",
+        error
+      );
+
+      res.status(400).json({
+        error:
+          error.message ||
+          "No se pudo actualizar la planilla",
+      });
+    }
+  }
+);
+
 router.delete("/collection-account-payrolls/:id", auth, allow("ADMIN"), async (req, res) => {
   try {
     if (!isValidObjectId(req.params.id)) {
