@@ -21,6 +21,11 @@ const companySchema = new mongoose.Schema({
     enum: ["SI", "NO"],
     default: "SI",
   },
+
+  domesticEmployer: {
+  type: Boolean,
+  default: false,
+},
   // Datos PILA propios de la empresa
 documentType: {
   type: String,
@@ -283,6 +288,11 @@ companyNit: {
   default: "" 
 },
 
+domesticEmployer: {
+  type: Boolean,
+  default: false,
+},
+
 groupNit: { 
   type: String, 
   default: "" 
@@ -414,6 +424,11 @@ const receiptSchema = new mongoose.Schema({
     enum: ["SI", "NO"],
     default: "NO",
   },
+
+  domesticEmployer: {
+  type: Boolean,
+  default: false,
+},
     eps: String,
 afp: String,
 

@@ -43,11 +43,48 @@ router.put("/companies/:id", auth, allow("ADMIN"), async (req, res) => {
       }
     );
 
-    if (!company) {
-      return res.status(404).json({ error: "Empresa no encontrada" });
-    }
+   if (!company) {
+  return res.status(404).json({
+    error: "Empresa no encontrada",
+  });
+}
 
-    res.json(company);
+// Si se modificó la condición de empleador doméstico,
+// actualizar automáticamente los trabajadores de esa empresa.
+if (
+  Object.prototype.hasOwnProperty.call(
+    req.body,
+    "domesticEmployer"
+  )
+) {
+  const domesticEmployer =
+    req.body.domesticEmployer === true ||
+    String(req.body.domesticEmployer).toLowerCase() ===
+      "true";
+
+  await Client.updateMany(
+    {
+      clientType: {
+        $in: ["AGRUPADO", "EMPRESA"],
+      },
+      $or: [
+        {
+          companyNit: String(company.nit || "").trim(),
+        },
+        {
+          companyName: company.name,
+        },
+      ],
+    },
+    {
+      $set: {
+        domesticEmployer,
+      },
+    }
+  );
+}
+
+res.json(company);
   } catch (e) {
     console.error("ERROR PUT /companies/:id", e);
     res.status(400).json({ error: e.message || "No se pudo actualizar la empresa" });
