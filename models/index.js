@@ -230,6 +230,90 @@ const collectionAccountPayrollSchema = new mongoose.Schema({
   cancelledAt: { type: Date, default: null },
 }, { timestamps: true });
 
+const payrollRecordSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ["RETIRO"],
+      required: true,
+      index: true,
+    },
+
+    planillaNumber: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    paymentDate: {
+      type: String,
+      required: true,
+    },
+
+    operator: {
+      type: String,
+      default: "",
+    },
+
+    bank: {
+      type: String,
+      default: "",
+    },
+
+    planillaValue: {
+      type: Number,
+      default: 0,
+    },
+
+    lateFee: {
+      type: Number,
+      default: 0,
+    },
+
+    totalPaid: {
+      type: Number,
+      default: 0,
+    },
+
+    periodLabel: {
+      type: String,
+      default: "",
+    },
+
+    contributionPeriod: {
+      type: String,
+      default: "",
+    },
+
+    groupName: {
+      type: String,
+      default: "",
+    },
+
+    employees: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+
+    status: {
+      type: String,
+      enum: ["REGISTRADA", "ANULADA"],
+      default: "REGISTRADA",
+      index: true,
+    },
+
+    registeredBy: {
+      type: String,
+      default: "",
+    },
+
+    notes: {
+      type: String,
+      default: "",
+    },
+  },
+  { timestamps: true }
+);
 
 const groupSchema = new mongoose.Schema({
   nit: { type: String, required: true, unique: true, trim: true },
@@ -694,4 +778,5 @@ export const Expense = mongoose.model("Expense", expenseSchema);
 export const Reminder = mongoose.model("Reminder", reminderSchema);
 export const CollectionAccount = mongoose.model("CollectionAccount", collectionAccountSchema);
 export const CollectionAccountPayroll = mongoose.model("CollectionAccountPayroll", collectionAccountPayrollSchema);
+export const PayrollRecord = mongoose.model(  "PayrollRecord",  payrollRecordSchema);
 export const SystemSetting = mongoose.model(  "SystemSetting",  systemSettingSchema);
