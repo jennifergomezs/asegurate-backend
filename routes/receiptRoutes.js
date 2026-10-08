@@ -1,6 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
-import { Receipt, Client } from "../models/index.js";
+import { Receipt, Client, PayrollRecord } from "../models/index.js";
 import { auth, allow } from "../middleware/auth.js";
 import { nextTicket, makePublicCode, calculateReceiptAmounts } from "../utils/helpers.js";
 const { isValidObjectId } = mongoose;
