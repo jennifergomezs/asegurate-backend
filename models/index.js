@@ -398,6 +398,10 @@ companyNit: {
   default: "" 
 },
 
+// Sucursal asignada al trabajador de empresa
+companyBranchCode: { type: String, default: "", trim: true },
+companyBranchName: { type: String, default: "", trim: true },
+
 domesticEmployer: {
   type: Boolean,
   default: false,
