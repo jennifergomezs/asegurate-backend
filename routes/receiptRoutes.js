@@ -744,5 +744,43 @@ router.delete("/receipts/:id", auth, allow("ADMIN"), async (req, res) => {
 // 7) Iniciar servidor
 // =========================
 
+// Consultar una planilla de retiro por ID
+router.get(
+  "/payrolls/retirements/:id",
+  auth,
+  allow("ADMIN", "ASESOR"),
+  async (req, res) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ error: "ID de planilla inválido" });
+      }
+
+      const query = {
+        _id: req.params.id,
+        type: "RETIRO",
+        status: "REGISTRADA",
+      };
+
+      if (req.user.role !== "ADMIN") {
+        query.registeredBy = req.user.name;
+      }
+
+      const payroll = await PayrollRecord.findOne(query);
+
+      if (!payroll) {
+        return res.status(404).json({
+          error: "Planilla de retiro no encontrada",
+        });
+      }
+
+      res.json(payroll);
+    } catch (error) {
+      console.error("ERROR GET planilla de retiro", error);
+      res.status(500).json({
+        error: "No se pudo consultar la planilla de retiro",
+      });
+    }
+  }
+);
 
 export default router;

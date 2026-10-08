@@ -5,12 +5,102 @@ import {
   CollectionAccountPayroll,
   Client,
   Company,
+  PayrollRecord,
 } from "../models/index.js";
 import { auth, allow } from "../middleware/auth.js";
 import { ARL_RATES, roundToHundred, isNoAplica } from "../utils/helpers.js";
 const { isValidObjectId } = mongoose;
 
 const router = express.Router();
+
+// Comprueba si existe otro retiro vigente del trabajador
+// en planillas de cuentas de cobro.
+const hasOtherActiveRetirement = async (clientId, excludedPayrollId, session) => {
+  const payrolls = await CollectionAccountPayroll.find({
+    _id: { $ne: excludedPayrollId },
+    status: "REGISTRADA",
+  }).session(session);
+
+    let hasRetirementInCollectionAccounts = false;
+
+for (const payroll of payrolls) {
+  const selected = (payroll.employees || []).some(
+    (employee) =>
+      String(employee?.clientId || "") === String(clientId)
+  );
+
+  if (!selected) continue;
+
+  const account = await CollectionAccount.findById(
+    payroll.collectionAccountId
+  ).session(session);
+
+  const hasRet = (account?.items || []).some(
+    (item) =>
+      String(item?.itemType || "").toUpperCase() === "WORKER" &&
+      item?.included !== false &&
+      String(item?.clientId || "") === String(clientId) &&
+      hasRetirementNovelty(item)
+  );
+
+  if (hasRet) {
+    hasRetirementInCollectionAccounts = true;
+    break;
+  }
+}
+
+  if (hasRetirementInCollectionAccounts) {
+    return true;
+  }
+
+  const retirementRecords = await PayrollRecord.find({
+    type: "RETIRO",
+    status: "REGISTRADA",
+  }).session(session);
+
+  return retirementRecords.some((record) =>
+    (record.employees || []).some(
+      (employee) =>
+        String(employee?.clientId || "") === String(clientId)
+    )
+  );
+};
+
+// Identifica si un trabajador tiene novedad de retiro
+// registrada en su cuenta de cobro.
+const hasRetirementNovelty = (item) => {
+  const novelty = String(item?.novelty || "").toUpperCase();
+
+  return /\bRET\b/.test(novelty);
+};
+
+// Identifica los trabajadores cuyo retiro fue registrado
+// específicamente por una planilla de cuenta de cobro.
+const getRetiredClientsByPayroll = async (payrollId, session) => {
+  const clients = await Client.find({
+    status: "RETIRADO",
+    "history.action": "RETIRO",
+  }).session(session);
+
+  return clients.filter((client) =>
+   (() => {
+  const statusChanges = (client.history || []).filter(
+    (entry) =>
+      entry?.action === "RETIRO" ||
+      entry?.action === "REACTIVACION"
+  );
+
+  const lastChange = statusChanges[statusChanges.length - 1];
+
+  return (
+    lastChange?.action === "RETIRO" &&
+    lastChange?.reason === "Planilla pagada de cuenta de cobro" &&
+    String(lastChange?.payrollId || "") === String(payrollId) &&
+    lastChange?.previousStatus === "ACTIVO"
+  );
+})()
+  );
+};
 
 // ---- Planillas provenientes de cuentas de cobro
 router.get("/collection-account-payrolls", auth, allow("ADMIN"), async (req, res) => {
@@ -262,6 +352,9 @@ ccfName,
 });
 
 router.post("/collection-account-payrolls", auth, allow("ADMIN"), async (req, res) => {
+  const session = await mongoose.startSession();
+
+
   try {
     const {
       collectionAccountId,
@@ -346,6 +439,27 @@ router.post("/collection-account-payrolls", auth, allow("ADMIN"), async (req, re
       });
     }
 
+    // Identificar únicamente los trabajadores seleccionados
+// que tienen novedad RET en la cuenta de cobro.
+const retirementClientIds = [
+  ...new Set(
+    (account.items || [])
+      .filter(
+        (item) =>
+          String(item?.itemType || "").toUpperCase() === "WORKER" &&
+          item?.included !== false &&
+          hasRetirementNovelty(item) &&
+          item?.clientId &&
+          isValidObjectId(item.clientId) &&
+          employees.some(
+  (employee) =>
+    String(employee?.clientId || "") === String(item.clientId)
+)
+      )
+      .map((item) => String(item.clientId))
+  ),
+];
+
     const safePlanillaValue = Number(planillaValue || 0);
     const safeLateFee = Number(lateFee || 0);
     const calculatedTotalPaid = safePlanillaValue + safeLateFee;
@@ -354,7 +468,9 @@ router.post("/collection-account-payrolls", auth, allow("ADMIN"), async (req, re
         ? Number(totalPaid)
         : calculatedTotalPaid;
 
-    const payroll = await CollectionAccountPayroll.create({
+       session.startTransaction();
+
+    const [payroll] = await CollectionAccountPayroll.create([{
       collectionAccountId: account._id,
       collectionAccountNumber: account.number || "",
       accountType: account.accountType || "",
@@ -378,15 +494,48 @@ router.post("/collection-account-payrolls", auth, allow("ADMIN"), async (req, re
 
       notes: String(notes || ""),
       status: "REGISTRADA",
-      registeredBy: req.user.name,
-    });
+            registeredBy: req.user.name,
+    }], { session });
+
+   for (const clientId of retirementClientIds) {
+  const client = await Client.findById(clientId).session(session);
+
+  if (!client || client.status === "RETIRADO") {
+    continue;
+  }
+
+  const previousStatus = client.status;
+
+  client.status = "RETIRADO";
+
+  client.history.push({
+    date: new Date(),
+    action: "RETIRO",
+    reason: "Planilla pagada de cuenta de cobro",
+    previousStatus,
+    planillaNumber: String(planillaNumber).trim(),
+    payrollId: payroll._id,
+    registeredBy: req.user.name,
+  });
+
+  await client.save({ session });
+}
+
+await session.commitTransaction();
 
     res.json(payroll);
-  } catch (error) {
+    } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
     console.error("ERROR POST /collection-account-payrolls", error);
+
     res.status(400).json({
       error: error.message || "No se pudo registrar la planilla",
     });
+  } finally {
+    await session.endSession();
   }
 });
 
@@ -398,7 +547,9 @@ router.put(
   "/collection-account-payrolls/:id",
   auth,
   allow("ADMIN"),
-  async (req, res) => {
+   async (req, res) => {
+    const session = await mongoose.startSession();
+
     try {
       const { id } = req.params;
 
@@ -577,6 +728,69 @@ router.put(
       // GUARDAR CAMBIOS
       // ------------------------------------------
 
+            // Guardar los trabajadores originales antes de editar.
+      const previousEmployees = [...(payroll.employees || [])];
+
+      // Consultar la cuenta de cobro original para verificar
+      // qué trabajadores tienen novedad RET.
+      const account = await CollectionAccount.findById(
+        payroll.collectionAccountId
+      );
+
+      if (!account) {
+        return res.status(404).json({
+          error: "Cuenta de cobro no encontrada",
+        });
+      }
+
+      // Identificar los trabajadores con novedad RET
+// según la cuenta de cobro original.
+const retirementClientIds = new Set(
+  (account.items || [])
+    .filter(
+      (item) =>
+        String(item?.itemType || "").toUpperCase() === "WORKER" &&
+        item?.included !== false &&
+        hasRetirementNovelty(item) &&
+        item?.clientId &&
+        isValidObjectId(item.clientId)
+    )
+    .map((item) => String(item.clientId))
+);
+
+// Comparar trabajadores anteriores y actuales.
+const previousClientIds = new Set(
+  previousEmployees
+    .map((employee) => String(employee?.clientId || ""))
+    .filter(Boolean)
+);
+
+const currentClientIds = new Set(
+  employees
+    .map((employee) => String(employee?.clientId || ""))
+    .filter(Boolean)
+);
+
+// Trabajadores con RET que fueron quitados de la planilla.
+const removedRetirementClientIds = [...previousClientIds].filter(
+  (clientId) =>
+    retirementClientIds.has(clientId) &&
+    !currentClientIds.has(clientId)
+);
+
+// Trabajadores con RET que fueron agregados a la planilla.
+const addedRetirementClientIds = [...currentClientIds].filter(
+  (clientId) =>
+    retirementClientIds.has(clientId) &&
+    !previousClientIds.has(clientId)
+);
+
+
+
+// Iniciar la transacción antes de modificar la planilla
+// y los estados de los trabajadores.
+session.startTransaction();
+
       payroll.planillaNumber =
         String(planillaNumber).trim();
 
@@ -605,13 +819,93 @@ router.put(
       payroll.updatedBy = req.user.name;
       payroll.updatedAt = new Date();
 
-      await payroll.save();
+      await payroll.save({ session });
 
+     // Registrar el retiro de trabajadores agregados a la planilla.
+for (const clientId of addedRetirementClientIds) {
+  const client = await Client.findById(clientId).session(session);
+
+  if (!client || client.status === "RETIRADO") {
+    continue;
+  }
+
+  const previousStatus = client.status;
+
+  client.status = "RETIRADO";
+
+  client.history.push({
+    date: new Date(),
+    action: "RETIRO",
+    reason: "Planilla pagada de cuenta de cobro",
+    previousStatus,
+    planillaNumber: String(planillaNumber).trim(),
+    payrollId: payroll._id,
+    registeredBy: req.user.name,
+  });
+
+  await client.save({ session });
+}
+
+// Revisar los retiros de trabajadores quitados de la planilla.
+for (const clientId of removedRetirementClientIds) {
+  const client = await Client.findById(clientId).session(session);
+
+  if (!client || client.status !== "RETIRADO") {
+    continue;
+  }
+
+ const statusChanges = (client.history || []).filter(
+  (entry) =>
+    entry?.action === "RETIRO" ||
+    entry?.action === "REACTIVACION"
+);
+
+const lastChange = statusChanges[statusChanges.length - 1];
+
+const retirementEntry =
+  lastChange?.action === "RETIRO" &&
+  lastChange?.reason === "Planilla pagada de cuenta de cobro" &&
+  String(lastChange?.payrollId || "") === String(payroll._id) &&
+  lastChange?.previousStatus === "ACTIVO";
+
+  if (!retirementEntry) {
+    continue;
+  }
+
+  const hasOtherRetirement = await hasOtherActiveRetirement(
+    client._id,
+    payroll._id,
+    session
+  );
+
+  if (hasOtherRetirement) {
+    continue;
+  }
+
+  client.status = "ACTIVO";
+
+  client.history.push({
+    date: new Date(),
+    action: "REACTIVACION",
+    reason: "Trabajador retirado de planilla durante edición",
+    payrollId: payroll._id,
+    planillaNumber: payroll.planillaNumber,
+    registeredBy: req.user.name,
+  });
+
+  await client.save({ session });
+}
+
+await session.commitTransaction();
       res.json({
         message: "Planilla actualizada correctamente",
         payroll,
       });
-    } catch (error) {
+        } catch (error) {
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
+
       console.error(
         "ERROR PUT /collection-account-payrolls/:id",
         error
@@ -622,11 +916,15 @@ router.put(
           error.message ||
           "No se pudo actualizar la planilla",
       });
+    } finally {
+      await session.endSession();
     }
   }
 );
 
 router.delete("/collection-account-payrolls/:id", auth, allow("ADMIN"), async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
     if (!isValidObjectId(req.params.id)) {
       return res.status(400).json({ error: "ID de planilla inválido" });
@@ -641,20 +939,66 @@ router.delete("/collection-account-payrolls/:id", auth, allow("ADMIN"), async (r
     if (payroll.status === "ANULADA") {
       return res.status(400).json({ error: "La planilla ya está anulada" });
     }
+    // Identificar trabajadores cuyo retiro fue generado
+// por esta planilla antes de anularla.
+session.startTransaction();
 
-    payroll.status = "ANULADA";
+// Consultar dentro de la transacción a los trabajadores
+// cuyo retiro fue generado por esta planilla.
+const clientsToReview = await getRetiredClientsByPayroll(
+  payroll._id,
+  session
+);
+
+payroll.status = "ANULADA";
     payroll.cancelledAt = new Date();
     payroll.cancelledBy = req.user.name;
 
-    await payroll.save();
+   await payroll.save({ session });
 
-    res.json({
-      message: "Planilla anulada correctamente",
-      payroll,
-    });
-  } catch (error) {
+for (const client of clientsToReview) {
+  const hasOtherRetirement = await hasOtherActiveRetirement(
+    client._id,
+    payroll._id,
+    session
+  );
+
+  if (hasOtherRetirement) {
+    continue;
+  }
+
+  client.status = "ACTIVO";
+
+  client.history.push({
+    date: new Date(),
+    action: "REACTIVACION",
+    reason: "Anulación de planilla de cuenta de cobro",
+    payrollId: payroll._id,
+    planillaNumber: payroll.planillaNumber,
+    registeredBy: req.user.name,
+  });
+
+  await client.save({ session });
+}
+
+await session.commitTransaction();
+
+res.json({
+  message: "Planilla anulada correctamente",
+  payroll,
+});
+    } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
     console.error("ERROR DELETE /collection-account-payrolls/:id", error);
-    res.status(500).json({ error: "No se pudo anular la planilla" });
+
+    res.status(500).json({
+      error: error.message || "No se pudo anular la planilla",
+    });
+  } finally {
+    await session.endSession();
   }
 });
 
