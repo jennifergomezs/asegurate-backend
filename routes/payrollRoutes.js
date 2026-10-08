@@ -1,6 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
-import { Receipt, PayrollRecord } from "../models/index.js";
+import { Receipt, PayrollRecord, Client } from "../models/index.js";
 import { auth, allow } from "../middleware/auth.js";
 const { isValidObjectId } = mongoose;
 
@@ -220,6 +220,143 @@ router.put("/payrolls/remove-receipt", auth, allow("ADMIN"), async (req, res) =>
   }
 });
 
+// Registrar planilla y confirmar retiros de Mensualidades
+router.post(
+  "/payrolls/retirement/confirm",
+  auth,
+  allow("ADMIN", "ASESOR"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+      const {
+        planillaNumber,
+        paymentDate,
+        operator,
+        bank,
+        planillaValue,
+        lateFee,
+        totalPaid,
+        periodLabel,
+        contributionPeriod,
+        groupName,
+        employees,
+        month,
+        year,
+      } = req.body;
+
+      if (!String(planillaNumber || "").trim() || !paymentDate) {
+        return res.status(400).json({
+          error: "Número de planilla y fecha de pago son obligatorios",
+        });
+      }
+
+      if (!Array.isArray(employees) || employees.length === 0) {
+        return res.status(400).json({
+          error: "Debes incluir al menos un trabajador",
+        });
+      }
+
+      const ids = employees.map((employee) =>
+        String(employee.clientId || "")
+      );
+
+      if (
+        ids.some((id) => !mongoose.isValidObjectId(id)) ||
+        new Set(ids).size !== ids.length
+      ) {
+        return res.status(400).json({
+          error: "Hay trabajadores inválidos o repetidos",
+        });
+      }
+
+      let savedPayroll;
+
+      await session.withTransaction(async () => {
+        const clients = await Client.find({
+          _id: { $in: ids },
+          clientType: "AGRUPADO",
+          status: { $ne: "RETIRADO" },
+        }).session(session);
+
+        if (clients.length !== ids.length) {
+          throw new Error(
+            "Uno o más trabajadores ya están retirados o no son válidos"
+          );
+        }
+
+        const [payroll] = await PayrollRecord.create(
+          [
+            {
+              type: "RETIRO",
+              planillaNumber: String(planillaNumber).trim(),
+              paymentDate,
+              operator: String(operator || ""),
+              bank: String(bank || ""),
+              planillaValue: Number(planillaValue || 0),
+              lateFee: Number(lateFee || 0),
+              totalPaid: Number(totalPaid || 0),
+              periodLabel: String(periodLabel || ""),
+              contributionPeriod: String(contributionPeriod || ""),
+              groupName: String(groupName || ""),
+              employees,
+              registeredBy: req.user?.name || "",
+              notes: "Planilla de retiro generada desde Mensualidades",
+            },
+          ],
+          { session }
+        );
+
+        savedPayroll = payroll;
+
+        for (const employee of employees) {
+          const client = clients.find(
+            (item) => String(item._id) === String(employee.clientId)
+          );
+
+          const retirementDate = String(employee.retirementDate || "");
+
+          if (!client || !retirementDate) {
+            throw new Error("Falta la fecha de retiro de un trabajador");
+          }
+
+          client.status = "RETIRADO";
+          client.leaveDate = retirementDate;
+
+          client.history.push({
+            type: "RETIRO",
+            date: retirementDate,
+            month: String(month || ""),
+            year: String(year || ""),
+            monthLabel: String(periodLabel || ""),
+            groupName: client.groupName || "",
+            previousGroupName: "",
+            daysWorked: 1,
+            note: "Retiro generado desde Mensualidades",
+            registeredBy: req.user?.name || "",
+            registeredRole: req.user?.role || "",
+            registeredAt: new Date(),
+          });
+
+          await client.save({ session });
+        }
+      });
+
+      res.status(201).json({
+        message: "Planilla registrada y trabajadores retirados correctamente",
+        payroll: savedPayroll,
+      });
+    } catch (error) {
+      console.error("ERROR /payrolls/retirement/confirm", error);
+
+      res.status(400).json({
+        error: error.message || "No se pudo completar el retiro",
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
 
 
 export default router;
