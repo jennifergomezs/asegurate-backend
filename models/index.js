@@ -57,11 +57,27 @@ branchCode: {
   default: "1",
 },
 
-branchName: {
-  type: String,
-  default: "PRINCIPAL",
+branches: {
+  type: [
+    {
+      code: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      name: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      active: {
+        type: Boolean,
+        default: true,
+      },
+    },
+  ],
+  default: [],
 },
-
 arl: {
   type: String,
   default: "",
@@ -141,6 +157,16 @@ const collectionAccountSchema = new mongoose.Schema({
   accountType: { type: String, enum: ["AGRUPADOS", "EMPRESA"], required: true },
   companyName: { type: String, required: true, trim: true },
   companyNit: { type: String, default: "" },
+  companyBranchCode: {
+  type: String,
+  default: "",
+  trim: true,
+},
+companyBranchName: {
+  type: String,
+  default: "",
+  trim: true,
+},
   companyClientId: { type: mongoose.Schema.Types.ObjectId, ref: "Client", default: null },
   groupName: { type: String, default: "" },
   periodMonth: { type: String, required: true },
